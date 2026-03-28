@@ -1,6 +1,5 @@
 ---
-description: "Check the current state of a Harness Workflow with content validation. Shows stage progress and next actions."
-disable-model-invocation: true
+description: "Check Harness Workflow status with content validation - use the harness-workflow:status skill"
 ---
 
 Invoke the harness-workflow:status skill and follow it exactly as presented to you
