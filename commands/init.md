@@ -1,5 +1,5 @@
 ---
-description: "Initialize a project with Harness Workflow structure - use the harness-workflow:init skill"
+description: "Deprecated - use the harness-workflow:init skill instead"
 ---
 
-Invoke the harness-workflow:init skill and follow it exactly as presented to you
+Tell your human partner that this command is deprecated and will be removed in the next major release. They should ask you to use the "harness-workflow init" skill instead.

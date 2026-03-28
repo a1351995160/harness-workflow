@@ -1,5 +1,5 @@
 ---
-description: "Verify implementation against specs - use the harness-workflow:verify skill"
+description: "Deprecated - use the harness-workflow:verify skill instead"
 ---
 
-Invoke the harness-workflow:verify skill and follow it exactly as presented to you
+Tell your human partner that this command is deprecated and will be removed in the next major release. They should ask you to use the "harness-workflow verify" skill instead.
