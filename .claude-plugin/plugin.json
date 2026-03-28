@@ -1,25 +1,6 @@
 {
   "name": "harness-workflow",
-  "description": "Executable AI-driven development workflow with Harness Engineering, OpenSpec SDD, and build-verify enforcement. Provides structured development with mechanical quality gates, 5-stage workflow (Intent → Spec → Plan → Harness → Execute), build-verify loops, doom loop detection, and entropy scanning.",
+  "description": "Executable AI-driven development workflow with Harness Engineering, OpenSpec SDD, and build-verify enforcement",
   "version": "1.0.0",
-  "author": {
-    "name": "a1351995160",
-    "email": "a1351995160@users.noreply.github.com"
-  },
-  "homepage": "https://github.com/a1351995160/harness-workflow",
-  "repository": "https://github.com/a1351995160/harness-workflow",
-  "license": "MIT",
-  "skills": "./skills/",
-  "keywords": [
-    "harness",
-    "workflow",
-    "openspec",
-    "build-verify",
-    "sdd",
-    "spec-driven",
-    "quality-gates",
-    "doom-loop",
-    "entropy-scan",
-    "vibe-coding"
-  ]
+  "author": "a1351995160"
 }
