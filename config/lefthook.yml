@@ -1,0 +1,87 @@
+# Git Hooks Configuration
+# Using Lefthook for fast, parallel git hooks
+# TypeScript default — see references/hooks-cicd-by-language.md for Python, Go, Java
+
+# Install: npx lefthook install
+# Config: Place this file as lefthook.yml in project root
+
+# Pre-commit hooks (run on every commit)
+pre-commit:
+  parallel: true
+  commands:
+    # Linting
+    lint:
+      glob: "*.{js,jsx,ts,tsx}"
+      run: npm run lint -- --file {staged_files}
+      stage_fixed: true
+
+    # Format check (no stage_fixed since --check doesn't modify files)
+    format:
+      glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      run: npm run format -- --check {staged_files}
+
+    # Type checking
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: npm run typecheck
+
+    # Spell check for docs
+    spellcheck:
+      glob: "*.md"
+      run: npx cspell {staged_files}
+
+# Pre-push hooks (run before pushing)
+pre-push:
+  commands:
+    # Harness build-verify loop (lint + typecheck + test)
+    harness-verify:
+      run: python scripts/run.py build_verify.py --loop tight --max-iterations 3
+      env:
+        CI: true
+
+    # Full test suite with coverage
+    test-coverage:
+      run: npm run test:coverage
+      env:
+        CI: true
+
+    # Security audit with secret scanning
+    security-audit:
+      run: npm audit --audit-level=moderate && gitleaks protect --source . --staged
+
+# Commit message validation
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        msg=$(cat {1})
+        if ! echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore|perf|ci)(\(.+\))?: .{1,}$"; then
+          echo "Commit message must follow conventional commits format"
+          echo "   Example: feat: add user authentication"
+          exit 1
+        fi
+
+# Post-merge hooks (run after pulling)
+post-merge:
+  commands:
+    install-deps:
+      run: npm install
+
+# Post-checkout hooks (run after switching branches)
+post-checkout:
+  commands:
+    install-deps:
+      run: npm install
+      condition: "git diff --name-only {1} {2} | grep -q package.json"
+
+# CI/CD integration
+ci:
+  commands:
+    lint:
+      run: npm run lint
+    test:
+      run: npm run test:coverage
+    build:
+      run: npm run build
+    security:
+      run: npm audit --audit-level=high

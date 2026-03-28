@@ -1,0 +1,445 @@
+# Harness Configuration Template
+# Place this in your project at .harness/config.yaml
+#
+# Annotation guide:
+#   (no comment)  = mechanically enforced by scripts
+#   # instruction-only = guidance for Claude, not enforced by scripts
+#   # aspirational = cannot be enforced by Claude Code runtime
+
+# Workflow Configuration
+workflow:
+  # Enabled stages (order matters)
+  stages:
+    - intent      # Superpowers brainstorming
+    - spec        # OpenSpec specification
+    - plan        # Task planning
+    - harness     # Agent orchestration
+    - execute     # Implementation
+
+  # Stage timeouts (in seconds)
+  timeouts:
+    intent: 300       # 5 minutes for brainstorming
+    spec: 600         # 10 minutes for spec creation
+    plan: 300         # 5 minutes for planning
+    harness: 120      # 2 minutes for harness setup
+    execute: 3600     # 1 hour for execution
+
+  # Quality gate configuration (enforced by build_verify.py)
+  quality_gates:
+    enabled: true
+    strict: false     # Set true to block on any gate failure
+    gates:
+      - name: lint
+        enabled: true
+        command: npm run lint
+        blocking: true
+      - name: typecheck
+        enabled: true
+        command: npm run typecheck
+        blocking: true
+      - name: test
+        enabled: true
+        command: npm run test:coverage
+        blocking: true
+        threshold: 80  # Minimum coverage %
+      - name: security
+        enabled: true
+        command: npm audit --audit-level=moderate
+        blocking: false
+      - name: review
+        enabled: true
+        requires_human: true
+        blocking: true
+
+# Agent Pool Configuration # instruction-only — Agent dispatch via OMC agent catalog, not scripts
+agents:
+  # Maximum concurrent agents
+  max_parallel: 3
+
+  # Default timeout per agent task (seconds)
+  timeout: 300
+
+  # Agent definitions (aspirational — actual dispatch via OMC agent catalog)
+  # Full agent details in agents/harness-agents.yaml
+  pool:
+    # Planning
+    analyst:
+      model: opus
+      temperature: 0.6  # aspirational
+      max_tokens: 4096  # aspirational
+    planner:
+      model: opus
+      temperature: 0.7  # aspirational
+      max_tokens: 4096  # aspirational
+    architect:
+      model: opus
+      temperature: 0.5  # aspirational
+      max_tokens: 8192  # aspirational
+    # Execution
+    executor:
+      model: sonnet
+      temperature: 0.3  # aspirational
+      max_tokens: 4096  # aspirational
+      max_retries: 3
+    deep-executor:
+      model: opus
+      temperature: 0.4  # aspirational
+      max_tokens: 8192  # aspirational
+    # Review
+    reviewer:
+      model: opus
+      temperature: 0.2  # aspirational
+      max_tokens: 4096  # aspirational
+    security:
+      model: sonnet
+      temperature: 0.1  # aspirational
+      max_tokens: 2048  # aspirational
+    # Testing
+    tester:
+      model: sonnet
+      temperature: 0.2  # aspirational
+      max_tokens: 4096  # aspirational
+    # Documentation
+    writer:
+      model: haiku
+      temperature: 0.5  # aspirational
+      max_tokens: 2048  # aspirational
+    # Analysis & Recovery
+    build-fixer:
+      model: sonnet
+      temperature: 0.2  # aspirational
+      max_tokens: 2048  # aspirational
+      max_retries: 5
+    debugger:
+      model: sonnet
+      temperature: 0.2  # aspirational
+      max_tokens: 4096  # aspirational
+    verifier:
+      model: sonnet
+      temperature: 0.1  # aspirational
+      max_tokens: 2048  # aspirational
+    # Observability
+    observer:
+      model: sonnet
+      temperature: 0.2  # aspirational
+      max_tokens: 4096  # aspirational
+    gc-agent:
+      model: sonnet
+      temperature: 0.3  # aspirational
+      max_tokens: 4096  # aspirational
+
+  # Task routing rules (synced with agents/harness-agents.yaml coordination.routing)
+  routing:
+    - priority: 1
+      pattern: "security|auth|vulnerability|sanitize|inject"
+      agent: security
+    - priority: 2
+      pattern: "test|spec|coverage|assert|mock"
+      agent: tester
+      exclude: ["review test"]
+    - priority: 3
+      pattern: "review|check|audit"
+      agent: reviewer
+      exclude: ["security review"]
+    - priority: 4
+      pattern: "implement|create|build|write code"
+      agent: executor
+    - priority: 5
+      pattern: "design|architecture"
+      agent: architect
+    - priority: 6
+      pattern: "document|readme|docs"
+      agent: writer
+    - priority: 7
+      pattern: "debug|error|bug|fix"
+      agent: debugger
+    - priority: 8
+      pattern: "verify|complete|done"
+      agent: verifier
+    - priority: 9
+      pattern: "complex.*implement|multi.*file|autonomous"
+      agent: deep-executor
+    - priority: 10
+      pattern: "plan|breakdown|tasks"
+      agent: planner
+    - priority: 11
+      pattern: "analyze|requirements|clarify"
+      agent: analyst
+    - priority: 12
+      pattern: "build error|compilation|type error|dependency"
+      agent: build-fixer
+    - priority: 13
+      pattern: "observe|trace|analytics|doom loop|token usage"
+      agent: observer
+    - priority: 14
+      pattern: "entropy|cleanup|slop|dead code|stale docs"
+      agent: gc-agent
+
+# OpenSpec Configuration
+openspec:
+  # Directory for spec files
+  directory: openspec
+
+  # Enable delta tracking
+  delta_tracking: true
+
+  # Auto-generate specs from intent
+  auto_generate: true
+
+  # Spec file naming
+  naming:
+    proposals: "proposals/{feature}.md"
+    designs: "designs/{feature}.md"
+    tasks: "tasks/{feature}.md"
+    delta: "delta/changes.md"
+
+  # Verification settings
+  verification:
+    check_design_match: true
+    check_edge_cases: true
+    check_security: true
+
+# Superpowers Integration # instruction-only — Invoked via command files, not directly by scripts
+superpowers:
+  # Force brainstorming before implementation
+  brainstorm_first: true
+
+  # Require clarification for vague requests
+  require_clarification: true
+
+  # Minimum clarification rounds
+  min_questions: 3
+
+  # Skills to activate (wired in commands/start.md)
+  skills:
+    - brainstorming
+    - planning
+    - systematic-debugging
+    - test-driven-development
+
+# Context Engineering # instruction-only — Claude manages context, scripts cannot enforce
+context:
+  # Maximum context window usage before compaction
+  max_context_ratio: 0.8  # Trigger compaction at 80%
+
+  # Context sources to include
+  sources:
+    - name: project_structure
+      include: true
+    - name: recent_changes
+      include: true
+      max_files: 10
+    - name: related_docs
+      include: true
+    - name: test_results
+      include: true
+
+  # Memory management
+  memory:
+    enabled: true
+    persist: true
+    max_entries: 100
+
+# Feedback Loops
+feedback:
+  # Enable automatic iteration
+  auto_iterate: true
+
+  # Maximum iterations
+  max_iterations: 5
+
+  # Triggers for iteration
+  triggers:
+    - test_failure
+    - review_rejection
+    - security_issue
+
+  # Notification settings
+  notifications:
+    enabled: false
+    # webhook_url: ""
+    # events: [stage_complete, quality_gate_failed, workflow_complete]
+
+# Git Integration
+git:
+  # Auto-commit after stages
+  auto_commit:
+    intent: false
+    spec: true
+    plan: false
+    execute: true
+
+  # Commit message format
+  commit_format: |
+    {type}: {description}
+
+    Stage: {stage}
+    Tasks: {tasks}
+
+    Co-Authored-By: Harness Workflow
+
+  # Branch naming
+  branch_format: "feature/{feature-name}"
+
+# Metrics & Logging
+metrics:
+  enabled: true
+
+  # Metrics to track
+  track:
+    - stage_duration
+    - agent_usage
+    - quality_gate_results
+    - iteration_count
+    - token_usage
+
+  # Log level
+  log_level: info  # debug, info, warn, error
+
+  # Export metrics
+  export:
+    enabled: false
+    # format: json
+    # destination: .harness/metrics.json
+
+# ─────────────────────────────────────────────────────────────
+# Build-Verify Loop (Self-Verification)
+# ─────────────────────────────────────────────────────────────
+build_verify_loop:
+  enabled: true
+  context_efficient: true  # Silent on success, verbose on failure
+
+  stages:
+    - name: lint
+      command: "npm run lint"
+      type: tight        # tight = fast, seconds
+      max_iterations: 10
+
+    - name: unit_test
+      command: "npm run test:unit"
+      type: tight
+      max_iterations: 10
+
+    - name: integration_test
+      command: "npm run test:integration"
+      type: loose        # loose = slow, minutes
+      max_iterations: 5
+
+    - name: e2e_test
+      command: "npm run test:e2e"
+      type: loose
+      max_iterations: 3
+
+  # Doom loop detection (consolidated — also referenced in observability section)
+  doom_loop_detection:
+    enabled: true
+    same_error_threshold: 3    # Same error 3 times = doom loop
+    action: "pause_and_notify"
+
+# ─────────────────────────────────────────────────────────────
+# Context Engineering (detailed settings) # instruction-only
+# ─────────────────────────────────────────────────────────────
+context_engineering:
+  # Progressive Disclosure: AGENTS.md as TOC, load docs on demand
+  progressive_disclosure: true
+
+  # Sub-agent Context Firewall
+  context_firewall:
+    enabled: true              # Delegate to isolated sub-agents
+    return_format: "summary_only"
+    subagent_types:
+      - research
+      - codebase_exploration
+      - security_scanning
+
+  # Context Compaction (uses max_context_ratio from context section above)
+  compaction_strategy: "head_tail"
+  head_lines: 20
+  tail_lines: 20
+  offload_to: ".harness/outputs/"
+  silent_on_success: true      # Don't inject success outputs
+
+# ─────────────────────────────────────────────────────────────
+# Entropy Management (AI Slop Cleanup)
+# ─────────────────────────────────────────────────────────────
+entropy_management:
+  enabled: true
+
+  # What to scan for
+  scan_targets:
+    - outdated_documentation
+    - circular_dependencies
+    - dead_code
+    - unused_imports
+    - style_inconsistencies
+    - hardcoded_values
+
+  # GC Agent schedule
+  gc_agent:
+    enabled: true
+    schedule: "0 9 * * 1-5"     # Weekdays at 9am
+    model: sonnet                # Cost-effective
+    max_prs_per_run: 5
+    max_files_per_pr: 10
+
+  # Quality tracking
+  quality_grades:
+    enabled: true
+    track_trend: true            # Track grade over time
+
+# ─────────────────────────────────────────────────────────────
+# Agent Observability # aspirational — Requires Docker, DevTools, tracing infrastructure
+# ─────────────────────────────────────────────────────────────
+observability:
+  # Distributed Tracing
+  tracing:
+    enabled: true
+    store_artifacts: true        # Store inputs/outputs for replay
+    replay_enabled: true
+    retention_days: 30
+
+  # Token Usage Analytics
+  token_analytics:
+    enabled: true
+    track_per_request: true
+    track_cumulative: true
+    cost_allocation: true
+    allocation_by: [feature, agent_type, task]
+
+  # Continuous Evaluation
+  continuous_eval:
+    enabled: true
+    llm_as_judge:
+      enabled: true
+      model: "claude-sonnet-4-6"
+      dimensions:
+        - name: accuracy
+          weight: 0.4
+          threshold: 0.85
+        - name: helpfulness
+          weight: 0.3
+          threshold: 0.80
+        - name: safety
+          weight: 0.3
+          threshold: 0.95
+
+    human_calibration:
+      enabled: true
+      frequency: "weekly"
+      sample_size: 20
+
+  # Alerting
+  alerting:
+    enabled: true
+    rules:
+      - name: token_spike
+        condition: "tokens_per_minute > 2 * baseline"
+        severity: warning
+      - name: doom_loop
+        condition: "same_error_count >= 3"
+        severity: critical
+        action: pause_agent
+      - name: safety_violation
+        condition: "safety_score < 0.90"
+        severity: critical
+        action: halt_and_notify
