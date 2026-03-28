@@ -9,6 +9,7 @@
   "homepage": "https://github.com/a1351995160/harness-workflow",
   "repository": "https://github.com/a1351995160/harness-workflow",
   "license": "MIT",
+  "skills": "./skills/",
   "keywords": [
     "harness",
     "workflow",
