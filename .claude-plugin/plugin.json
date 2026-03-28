@@ -2,5 +2,12 @@
   "name": "harness-workflow",
   "description": "Executable AI-driven development workflow with Harness Engineering, OpenSpec SDD, and build-verify enforcement",
   "version": "1.0.0",
-  "author": "a1351995160"
+  "author": {
+    "name": "a1351995160",
+    "email": "a1351995160@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/a1351995160/harness-workflow",
+  "repository": "https://github.com/a1351995160/harness-workflow",
+  "license": "MIT",
+  "keywords": ["harness", "workflow", "openspec", "sdd", "build-verify", "doom-loop", "development"]
 }
