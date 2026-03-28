@@ -1,16 +1,23 @@
 {
   "name": "harness-workflow-marketplace",
-  "owner": "a1351995160",
+  "owner": {
+    "name": "a1351995160",
+    "email": "a1351995160@users.noreply.github.com"
+  },
   "metadata": {
     "description": "Harness Workflow - Structured AI Development Plugin",
-    "website": "https://github.com/a1351995160/harness-workflow"
+    "version": "1.0.0"
   },
   "plugins": [
     {
       "name": "harness-workflow",
-      "source": "https://github.com/a1351995160/harness-workflow",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/a1351995160/harness-workflow.git"
+      },
       "description": "Executable AI-driven development workflow with OpenSpec SDD, build-verify loops, doom loop detection, and entropy scanning. 4 skills: init, start, status, verify.",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "strict": true
     }
   ]
 }
