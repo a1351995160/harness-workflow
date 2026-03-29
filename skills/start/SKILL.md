@@ -117,11 +117,34 @@ When this command is invoked, follow these stages:
 
 ### Stage 3: Planning
 
-1. Parse the task list from `tasks.md`
-2. Build a dependency graph from task dependencies
-3. Identify parallel execution opportunities
-4. Assign tasks to appropriate agents from `../../agents/harness-agents.yaml`
-5. Update `.harness/state.json` stage "plan" to "complete"
+<HARD-GATE>
+If the 'superpowers:writing-plans' skill is available, you MUST invoke it using the Skill tool with skill: "superpowers:writing-plans". This creates a detailed implementation plan with bite-sized tasks that can be executed in batches.
+
+If superpowers is NOT available, create the plan manually following the steps below.
+
+This gate is NOT optional for complex features (3+ files, multiple components, or any feature affecting architecture). For trivial single-file changes, you may skip to Stage 5 directly.
+</HARD-GATE>
+
+1. **If superpowers:writing-plans is available** — invoke it:
+   ```
+   Skill tool with: skill: "superpowers:writing-plans"
+   ```
+   The skill will create a detailed plan from the specs with:
+   - Bite-sized tasks (each doable in one batch)
+   - Dependencies between tasks
+   - Review checkpoints between batches
+
+2. **If superpowers is NOT available** — create plan manually:
+   - Parse the task list from `tasks.md`
+   - Break tasks into bite-sized batches (each ~15 min of work)
+   - Build a dependency graph from task dependencies
+   - Identify parallel execution opportunities
+   - Assign tasks to appropriate agents from `../../agents/harness-agents.yaml`
+   - Write the plan to a visible location for user review
+
+3. **Present the plan to the user for approval before proceeding**
+
+4. Update `.harness/state.json` stage "plan" to "complete"
 
 ### Stage 4: Harness (Agent Orchestration)
 
@@ -133,7 +156,14 @@ When this command is invoked, follow these stages:
 
 ### Stage 5: Execute & Verify
 
-1. **Use `/opsx:apply`** to implement tasks:
+1. **If superpowers:executing-plans is available** — invoke it:
+   ```
+   Skill tool with: skill: "superpowers:executing-plans"
+   ```
+   The skill will execute the plan in batches with review checkpoints.
+   After each batch, it checks with the user before proceeding.
+
+   **If superpowers is NOT available**, use OPSX apply:
    ```bash
    /opsx:apply <feature-name>
    ```
