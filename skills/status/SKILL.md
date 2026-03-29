@@ -1,11 +1,12 @@
 ---
 name: status
-description: "Check the current state of a Harness Workflow with content validation. Use when: user wants to know workflow progress; invokes /harness-workflow:status; asks 'what stage am I at' or 'workflow status'; wants to check if a stage gate passes. Validates artifact content, not just file existence."
+description: "Check the current state of a Harness Workflow with content validation. Use when: user wants to know workflow progress; invokes /harness-workflow:status; asks 'what stage am I at' or 'workflow status'; wants to check if a stage gate passes. Combines OpenSpec CLI status with harness state validation."
 ---
 
 # /harness-workflow:status - Check Workflow Status
 
 Display the current state of an active Harness Workflow with content validation.
+Combines OpenSpec CLI status with Harness state tracking.
 
 ## Usage
 
@@ -15,8 +16,32 @@ Display the current state of an active Harness Workflow with content validation.
 
 ## What It Does
 
-Runs `python ../../scripts/run.py check_status.py [options]` which:
+### Primary: OpenSpec CLI Status
 
+If OpenSpec CLI is installed:
+
+```bash
+openspec status --json
+```
+
+This shows:
+- Active changes and their artifact completion status
+- Artifact dependency graph state (BLOCKED / READY / DONE)
+- Which artifacts are ready to create next
+
+List all changes and specs:
+```bash
+openspec list --json         # List changes
+openspec list --specs --json # List specs
+```
+
+### Secondary: Harness State
+
+```bash
+python ../../scripts/run.py check_status.py [options]
+```
+
+This provides:
 1. **Reads `.harness/state.json`** to get workflow state
 2. **Validates artifact content** - checks required sections with minimum content
 3. **Determines stage progress** - cross-references state with validated artifacts
@@ -45,25 +70,38 @@ Runs `python ../../scripts/run.py check_status.py [options]` which:
 
 When this command is invoked:
 
-1. Run the status script:
+1. **Check OpenSpec CLI availability**:
+   ```bash
+   openspec --version
    ```
+
+2. **If OpenSpec is initialized**, run:
+   ```bash
+   openspec status --json
+   openspec list --json
+   ```
+   This shows artifact-level status for all active changes.
+
+3. **Run harness status**:
+   ```bash
    python ../../scripts/run.py check_status.py
    ```
 
-2. For machine-readable output:
-   ```
+4. **For machine-readable output**:
+   ```bash
    python ../../scripts/run.py check_status.py --json
    ```
 
-3. To check a specific stage gate:
-   ```
+5. **To check a specific stage gate**:
+   ```bash
    python ../../scripts/run.py check_status.py --gate spec
    ```
    - Exit code 0: Gate passes
    - Exit code 1: Gate blocked (reasons listed)
 
-4. Report the findings to the user:
-   - Which stages are complete, in progress, or pending
+6. **Report the combined findings** to the user:
+   - OpenSpec change status (which artifacts are done/ready/blocked)
+   - Harness stage progress (which stages are complete/in progress/pending)
    - Which artifacts have valid content vs. are missing sections
    - What the recommended next action is
 
@@ -78,9 +116,16 @@ Unlike checking only file existence, status validates content:
 | `design.md` | Architecture, Components | 100 chars |
 | `tasks.md` | Phase + task items | 50 chars |
 
-## OpenSpec CLI Integration
+## OPSX Integration
 
-If OpenSpec CLI is installed, status will also show `openspec status` output.
+Status also shows which OPSX commands are available for the next step:
+
+| Current State | Recommended Next Command |
+|---------------|------------------------|
+| No change created | `/opsx:explore` or `/opsx:propose` |
+| Proposal done, specs blocked | `/opsx:continue` to create specs |
+| All planning done | `/opsx:apply` to implement |
+| Implementation done | `/harness-workflow:verify` then `/opsx:archive` |
 
 ## Example Output
 
@@ -93,19 +138,24 @@ Language: python
 Framework: fastapi
 Current stage: spec
 
-Stages:
-  intent: INCOMPLETE
-    [-] intent.md: exists
-        Missing required section: 'Success Criteria'
-  spec: INCOMPLETE
-    [-] proposal.md: missing
+OpenSpec Changes:
+  add-auth (active):
+    proposal: DONE
+    specs: READY (ready to create)
+    design: BLOCKED (needs: specs)
+    tasks: BLOCKED (needs: specs, design)
+
+Harness Stages:
+  intent: COMPLETE
+  spec: IN PROGRESS
+    [-] proposal.md: exists, valid
     [-] design.md: missing
     [-] tasks.md: missing
   plan: PENDING
   harness: PENDING
   execute: PENDING
 
-Next: Edit intent.md with your project goals and success criteria
+Next: Run /opsx:continue to create specs for add-auth
 ```
 
 ## Exit Codes

@@ -1,6 +1,6 @@
 ---
 name: start
-description: "Start a complete 5-stage Harness Workflow for feature development. Use when: user has a feature or project to build; invokes /harness-workflow:start with a description; wants structured development from intent through verified implementation; mentions 'start workflow' or 'begin harness'. Handles VibeCoding (vague requests) and structured requests alike."
+description: "Start a complete 5-stage Harness Workflow for feature development. Use when: user has a feature or project to build; invokes /harness-workflow:start; wants structured development from intent through verified implementation; mentions 'start workflow' or 'begin harness'. Integrates with OPSX commands for spec-driven development."
 ---
 
 # /harness-workflow:start - Start Complete Development Workflow
@@ -21,7 +21,7 @@ Works for both structured requests and VibeCoding (vague "build me X" requests).
 ## VibeCoding Detection
 
 If the description is vague (no spec, no tests mentioned, no architecture discussed):
-1. Invoke `superpowers:brainstorming` Skill tool to explore the idea
+1. Use `/opsx:explore` to brainstorm and explore the idea
 2. Use brainstorming results to fill `intent.md`
 3. Continue with standard workflow below
 
@@ -32,49 +32,74 @@ When this command is invoked, follow these stages:
 ### Stage 0: Initialization Check
 
 1. Check if `.harness/state.json` exists in the project
-2. If not initialized, run:
+2. If not initialized, run `/harness-workflow:init` first:
    ```
-   python ../../scripts/run.py init_harness.py . --feature <feature-name>
+   This initializes OpenSpec CLI + Harness Workflow structure.
    ```
 3. Read state to determine current progress:
    ```
    python ../../scripts/run.py check_status.py --json
    ```
+4. If OpenSpec is initialized, also check:
+   ```bash
+   openspec status --json
+   ```
 
 ### Stage 1: Intent Capture
 
-1. **Invoke `superpowers:brainstorming` Skill** for structured ideation:
-   ```
-   Use Skill tool with: skill: "superpowers:brainstorming"
-   ```
+1. **Use `/opsx:explore`** for structured ideation and brainstorming
+   - This leverages OpenSpec's explore workflow to understand the problem space
+   - If superpowers is available, also consider `superpowers:brainstorming`
+
 2. Ask about: problem being solved, stakeholders, success criteria, constraints
-3. Fill in `intent.md` using `../../templates/intent.md` as the guide
+
+3. Fill in `intent.md` using the template
+
 4. Check the intent stage gate:
    ```
    python ../../scripts/run.py check_status.py --gate intent
    ```
 
-### Stage 2: Specification
+### Stage 2: Specification (via OPSX)
 
-1. Check the spec stage gate:
+1. **Create a new change using OpenSpec**:
+   ```bash
+   openspec new change <feature-name> --description "Feature description"
    ```
-   python ../../scripts/run.py check_status.py --gate spec
+
+2. **Generate planning artifacts** using OPSX commands:
+
+   **Quick path** (generate all at once):
+   ```bash
+   /opsx:propose
    ```
-2. Create OpenSpec documents from the intent:
+   This creates proposal, specs, design, and tasks in one step.
 
-   **If OpenSpec CLI is available:**
-   - Use `openspec` commands to create proposal, design, and tasks
+   **Or incremental path** (one artifact at a time):
+   ```bash
+   /opsx:continue    # Creates next artifact based on dependency graph
+   /opsx:continue    # Repeat until all planning artifacts are done
+   ```
 
-   **Fallback (no OpenSpec CLI):**
-   - Fill templates in `openspec/changes/<feature>/`
+   **Or fast-forward** (all planning artifacts at once):
+   ```bash
+   /opsx:ff <feature-name>
+   ```
+
+3. **Check artifact status**:
+   ```bash
+   openspec status --change <feature-name> --json
+   ```
+
+4. **Validate artifacts**:
+   ```bash
+   openspec validate --changes --strict --json
+   ```
+
+5. Fallback (no OpenSpec CLI) — fill templates manually in `openspec/changes/<feature>/`:
    - `proposal.md` - The "why" (problem, goals, success criteria)
    - `design.md` - The "how" (architecture, components, data model)
    - `tasks.md` - The execution steps (phased task breakdown)
-
-3. Verify the gate passes:
-   ```
-   python ../../scripts/run.py check_status.py --gate spec
-   ```
 
 ### Stage 3: Planning
 
@@ -94,7 +119,12 @@ When this command is invoked, follow these stages:
 
 ### Stage 5: Execute & Verify
 
-1. Run implementation agents in optimal order
+1. **Use `/opsx:apply`** to implement tasks:
+   ```bash
+   /opsx:apply <feature-name>
+   ```
+   This works through tasks, checking them off as you go.
+
 2. Execute build-verify loops after each task:
    ```
    python ../../scripts/run.py build_verify.py --loop tight --max-iterations 3
@@ -105,37 +135,47 @@ When this command is invoked, follow these stages:
 
 3. Run code review and security review
 
-4. **Invoke `superpowers:verification-before-completion` Skill** before marking done:
-   ```
-   Use Skill tool with: skill: "superpowers:verification-before-completion"
-   ```
-   This ensures all acceptance criteria are met before closing out.
+4. **Invoke `superpowers:verification-before-completion` Skill** before marking done
 
-5. Verify against OpenSpec specs:
+5. **Verify implementation** using OPSX:
+   ```bash
+   openspec validate --all --strict --json
+   ```
+   Plus harness verification:
    ```
    python ../../scripts/run.py verify_specs.py --strict --report
-   ```
-6. Run entropy scan before commit:
-   ```
    python ../../scripts/run.py entropy_scan.py
    ```
-7. Update `.harness/state.json` stage "execute" to "complete"
+
+6. Update `.harness/state.json` stage "execute" to "complete"
+
+7. **Archive the change**:
+   ```bash
+   /opsx:archive
+   ```
 
 ## Progress Tracking
 
 After each stage, check status:
-```
+```bash
+# Harness status
 python ../../scripts/run.py check_status.py
+
+# OpenSpec status
+openspec status --json
+
+# Or use the combined command
+/harness-workflow:status
 ```
 
 ## Quality Gates
 
 Each stage must pass quality gates before proceeding:
 - Stage 1: `check_status.py --gate intent` passes (intent.md has Problem + Success Criteria)
-- Stage 2: `check_status.py --gate spec` passes (proposal, design, tasks have required sections)
+- Stage 2: `openspec validate --changes --strict` passes
 - Stage 3: Plan has task breakdown with dependencies and assignments
 - Stage 4: Harness has agent config and quality gates configured
-- Stage 5: `build_verify.py` exits 0, `verify_specs.py --strict` passes, entropy scan clean
+- Stage 5: `build_verify.py` exits 0, `openspec validate --all` passes, entropy scan clean
 
 ## Doom Loop Recovery
 

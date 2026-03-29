@@ -1,11 +1,12 @@
 ---
 name: verify
-description: "Verify implementation against OpenSpec specifications with build-verify loop and entropy scan. Use when: user wants final verification; invokes /harness-workflow:verify; code writing is done and needs final check; wants to validate specs match implementation. Runs spec validation, build-verify, and entropy scan."
+description: "Verify implementation against OpenSpec specifications with build-verify loop and entropy scan. Use when: user wants final verification; invokes /harness-workflow:verify; code writing is done and needs final check; wants to validate specs match implementation. Combines OpenSpec CLI validation with harness build-verify and entropy scan."
 ---
 
 # /harness-workflow:verify - Verify Implementation Against Specs
 
 Verify that the implementation matches the OpenSpec specifications.
+Combines OpenSpec CLI validation with Harness build-verify and entropy scan.
 
 ## Usage
 
@@ -15,29 +16,58 @@ Verify that the implementation matches the OpenSpec specifications.
 
 ## What It Does
 
-Runs multiple verification scripts:
+Runs a layered verification pipeline:
 
-1. **OpenSpec CLI validation** (if available):
-   ```
-   openspec validate --all --json
-   ```
+### Layer 1: OpenSpec CLI Validation (Primary)
 
-2. **Spec verification** - validates structure, content depth, file references:
-   ```
-   python ../../scripts/run.py verify_specs.py --strict --report
-   ```
+```bash
+openspec validate --all --strict --json
+```
 
-3. **Build-verify loop** - runs lint, typecheck, test:
-   ```
-   python ../../scripts/run.py build_verify.py --loop tight
-   ```
+This validates:
+- All change proposals have required sections
+- All specs have proper structure and content depth
+- File references in specs point to existing files
+- Delta specs comply with ADDED/MODIFIED/REMOVED format
 
-4. **Entropy scan** - checks for dead code, style drift, stale docs:
-   ```
-   python ../../scripts/run.py entropy_scan.py
-   ```
+Additional OpenSpec checks:
+```bash
+openspec status --json                    # Artifact completion status
+openspec show <change-name> --json        # Detailed change view
+openspec show <change-name> --deltas-only # Show only deltas
+```
 
-## Options (verify_specs.py)
+### Layer 2: Spec Verification (Harness)
+
+Validates structure, content depth, and file references:
+
+```bash
+python ../../scripts/run.py verify_specs.py --strict --report
+```
+
+### Layer 3: Build-Verify Loop
+
+Runs lint, typecheck, test in a retry loop:
+
+```bash
+python ../../scripts/run.py build_verify.py --loop tight
+```
+
+- Exit code 0: All checks passed, proceed
+- Exit code 1: Checks failed, read output and fix
+- Exit code 2: **Doom loop detected** — pause and ask user
+
+### Layer 4: Entropy Scan
+
+Checks for dead code, style drift, stale docs:
+
+```bash
+python ../../scripts/run.py entropy_scan.py
+```
+
+## Options
+
+### verify_specs.py
 
 | Option | Description |
 |--------|-------------|
@@ -46,7 +76,7 @@ Runs multiple verification scripts:
 | `--project-dir DIR` | Specify project directory (default: current) |
 | `--json` | Output as JSON |
 
-## Options (build_verify.py)
+### build_verify.py
 
 | Option | Description |
 |--------|-------------|
@@ -54,7 +84,7 @@ Runs multiple verification scripts:
 | `--max-iterations N` | Max retry iterations (default: 3) |
 | `--json` | Output as JSON |
 
-## Options (entropy_scan.py)
+### entropy_scan.py
 
 | Option | Description |
 |--------|-------------|
@@ -65,22 +95,47 @@ Runs multiple verification scripts:
 
 When this command is invoked:
 
-1. Run all verification steps:
+1. **Check OpenSpec CLI availability**:
+   ```bash
+   openspec --version
    ```
+
+2. **Run Layer 1 - OpenSpec validation** (if available):
+   ```bash
+   openspec validate --all --strict --json
+   ```
+   If issues: report specific validation failures and guide user to fix.
+
+3. **Run Layer 2 - Spec verification**:
+   ```bash
    python ../../scripts/run.py verify_specs.py --strict --report
+   ```
+
+4. **Run Layer 3 - Build-verify loop**:
+   ```bash
    python ../../scripts/run.py build_verify.py --loop tight
+   ```
+
+5. **Run Layer 4 - Entropy scan**:
+   ```bash
    python ../../scripts/run.py entropy_scan.py
    ```
 
-2. Read the output and report results to the user
+6. **Report combined results**:
+   - OpenSpec validation: pass/fail with details
+   - Spec verification: structural compliance
+   - Build-verify: lint/typecheck/test results
+   - Entropy: dead code, style drift, stale docs
 
-3. If issues are found:
-   - Missing required sections: guide user to add them to the spec
-   - Build failures: read error output, implement fixes, re-run build_verify
-   - Doom loop (exit code 2): recommend human intervention or alternative approach
+7. **If issues are found**:
+   - OpenSpec validation failures: guide user to update specs
+   - Missing required sections: guide user to add them
+   - Build failures: read error output, implement fixes, re-run
+   - Doom loop (exit code 2): recommend human intervention
    - High entropy: list issues and optionally run `--fix`
 
-4. If all pass: confirm implementation matches specification
+8. **If all pass**: confirm implementation matches specification
+   - Suggest running `/opsx:archive` to archive the completed change
 
 ## Verification Checks
 
@@ -101,6 +156,19 @@ When this command is invoked:
 - Checks ADDED/MODIFIED/REMOVED sections for compliance
 - MODIFIED sections need "(Previously: ...)" notation
 - REMOVED sections need a reason
+
+## OPSX Integration
+
+After verification passes, the natural next step is:
+
+```bash
+/opsx:archive    # Archive the completed change
+```
+
+If verification reveals spec issues that need updating:
+```bash
+/opsx:continue   # Update the specific artifact that needs changes
+```
 
 ## Exit Codes
 
