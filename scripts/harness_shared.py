@@ -298,6 +298,8 @@ def run_command(cmd: str, cwd: Path, timeout: int = 120) -> Dict[str, Any]:
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
         return {
