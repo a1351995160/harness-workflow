@@ -18,10 +18,16 @@ Works for both structured requests and VibeCoding (vague "build me X" requests).
 
 - `description` (required): Natural language description of what you want to build
 
+<HARD-GATE>
+Before proceeding with ANY stage below, you MUST check if the 'superpowers:brainstorming' skill is available. If it IS available, you MUST invoke it the Skill tool with skill: "superpowers:brainstorming" and complete the full brainstorming process BEFORE any implementation work. This is NOT optional. This is NOT negotiable. Even if you think you understand the requirements, brainstorming must happen first.
+
+If superpowers is NOT available, use `/opsx:explore` instead for structured ideation.
+</HARD-GATE>
+
 ## VibeCoding Detection
 
 If the description is vague (no spec, no tests mentioned, no architecture discussed):
-1. Use `/opsx:explore` to brainstorm and explore the idea
+1. The brainstorming skill above will handle this naturally
 2. Use brainstorming results to fill `intent.md`
 3. Continue with standard workflow below
 
@@ -32,9 +38,9 @@ When this command is invoked, follow these stages:
 ### Stage 0: Initialization Check
 
 1. Check if `.harness/state.json` exists in the project
-2. If not initialized, run `/harness-workflow:init` first:
+2. If not initialized, run:
    ```
-   This initializes OpenSpec CLI + Harness Workflow structure.
+   python ../../scripts/run.py init_harness.py . --feature <feature-name>
    ```
 3. Read state to determine current progress:
    ```
@@ -45,15 +51,24 @@ When this command is invoked, follow these stages:
    openspec status --json
    ```
 
-### Stage 1: Intent Capture
+### Stage 1: Intent Capture (via Brainstorming)
 
-1. **Use `/opsx:explore`** for structured ideation and brainstorming
-   - This leverages OpenSpec's explore workflow to understand the problem space
-   - If superpowers is available, also consider `superpowers:brainstorming`
+1. **MANDATORY: Invoke brainstorming skill** — use the Skill tool:
+   ```
+   Skill tool with: skill: "superpowers:brainstorming"
+   ```
+   If superpowers is not available, use `/opsx:explore` instead.
 
-2. Ask about: problem being solved, stakeholders, success criteria, constraints
+2. The brainstorming skill will guide you through:
+   - Understanding the current project context
+   - Asking clarifying questions one at a time
+   - Proposing 2-3 approaches with trade-offs
+   - Presenting design sections for user approval
+   - Writing a design doc
+   - Spec self-review
+   - User reviews written spec
 
-3. Fill in `intent.md` using the template
+3. After brainstorming completes, fill in `intent.md` using the approved design
 
 4. Check the intent stage gate:
    ```
@@ -73,7 +88,6 @@ When this command is invoked, follow these stages:
    ```bash
    /opsx:propose
    ```
-   This creates proposal, specs, design, and tasks in one step.
 
    **Or incremental path** (one artifact at a time):
    ```bash
@@ -123,7 +137,6 @@ When this command is invoked, follow these stages:
    ```bash
    /opsx:apply <feature-name>
    ```
-   This works through tasks, checking them off as you go.
 
 2. Execute build-verify loops after each task:
    ```
@@ -135,7 +148,10 @@ When this command is invoked, follow these stages:
 
 3. Run code review and security review
 
-4. **Invoke `superpowers:verification-before-completion` Skill** before marking done
+4. **Invoke `superpowers:verification-before-completion` Skill** before marking done:
+   ```
+   Use Skill tool with: skill: "superpowers:verification-before-completion"
+   ```
 
 5. **Verify implementation** using OPSX:
    ```bash
@@ -171,7 +187,7 @@ openspec status --json
 ## Quality Gates
 
 Each stage must pass quality gates before proceeding:
-- Stage 1: `check_status.py --gate intent` passes (intent.md has Problem + Success Criteria)
+- Stage 1: `check_status.py --gate intent` passes + brainstorming completed
 - Stage 2: `openspec validate --changes --strict` passes
 - Stage 3: Plan has task breakdown with dependencies and assignments
 - Stage 4: Harness has agent config and quality gates configured
