@@ -1,5 +1,5 @@
 ---
-description: "Deprecated - use the harness-workflow:start skill instead"
+description: "Start a complete 5-stage development workflow from intent capture through verified implementation"
 ---
 
-Tell your human partner that this command is deprecated and will be removed in the next major release. They should ask you to use the "harness-workflow start" skill instead.
+Invoke the harness-workflow:start skill and follow it exactly as presented to you

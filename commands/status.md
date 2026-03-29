@@ -1,5 +1,5 @@
 ---
-description: "Deprecated - use the harness-workflow:status skill instead"
+description: "Check current workflow state with content validation and stage gate checks"
 ---
 
-Tell your human partner that this command is deprecated and will be removed in the next major release. They should ask you to use the "harness-workflow status" skill instead.
+Invoke the harness-workflow:status skill and follow it exactly as presented to you
