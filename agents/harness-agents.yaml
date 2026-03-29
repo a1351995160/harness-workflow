@@ -460,3 +460,24 @@ coordination:
     default: 300  # seconds
     max_retries: 3
     backoff: exponential
+
+  # Parallel groups: agents that CAN run simultaneously
+  parallel_groups:
+    - name: "tdd_cycle"
+      agents: ["tester", "architect"]
+      description: "Tests and interface review can run in parallel"
+    - name: "review_triple"
+      agents: ["reviewer", "security", "verifier"]
+      description: "Code quality, security, and spec compliance can run in parallel"
+    - name: "docs_parallel"
+      agents: ["writer", "gc-agent"]
+      description: "Documentation and cleanup can run in parallel"
+
+  # Dependency rules: which agents must complete before others start
+  dependencies:
+    reviewer: ["executor"]
+    security: ["executor"]
+    verifier: ["executor", "tester"]
+    tester: ["executor"]
+    writer: ["executor"]
+    gc-agent: []

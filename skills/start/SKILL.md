@@ -152,7 +152,17 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
 2. Set up quality gates per `../../config/harness-config.yaml`
 3. Prepare context engineering (progressive disclosure)
 4. Initialize build-verify feedback loops
-5. Update `.harness/state.json` stage "harness" to "in_progress"
+5. **Generate parallel execution plan**:
+   ```bash
+   python ../../scripts/run.py parallel_execute.py --dry-run
+   ```
+   This identifies independent tasks that can run in parallel.
+   Review the execution plan and present to user for approval.
+6. **Generate E2E test stubs** (if design has user-facing features):
+   ```bash
+   python ../../scripts/run.py e2e_generate.py
+   ```
+7. Update `.harness/state.json` stage "harness" to "in_progress"
 
 ### Stage 5: Execute & Verify
 
@@ -176,9 +186,28 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
    - Exit code 1: Checks failed, read output and fix
    - Exit code 2: **Doom loop detected** — pause and ask user for guidance
 
-3. Run code review and security review
+3. **Parallel execution** (for independent tasks):
+   Run `parallel_execute.py` to identify parallelizable tasks:
+   ```bash
+   python ../../scripts/run.py parallel_execute.py --dry-run --json
+   ```
+   When executing independent tasks in parallel:
+   - For each task in the same batch, launch an Agent tool call simultaneously
+   - Wait for all agents in the batch to complete
+   - Run build-verify before moving to next batch
 
-4. **Invoke `superpowers:verification-before-completion` Skill** before marking done:
+4. Run code review and security review
+
+5. **Generate and run E2E tests** (after unit tests pass):
+   ```bash
+   # Generate E2E test stubs from specs
+   python ../../scripts/run.py e2e_generate.py
+
+   # Review generated stubs, then run
+   python ../../scripts/run.py e2e_runner.py --browser chromium
+   ```
+
+6. **Invoke `superpowers:verification-before-completion` Skill** before marking done:
    ```
    Use Skill tool with: skill: "superpowers:verification-before-completion"
    ```

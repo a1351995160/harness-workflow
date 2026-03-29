@@ -1,0 +1,65 @@
+name: Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '{language_version}'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Checkstyle
+        run: mvn checkstyle:check
+
+      - name: PMD
+        run: mvn pmd:check
+
+      - name: SpotBugs
+        run: mvn spotbugs:check
+
+      - name: Test with Coverage
+        run: mvn test jacoco:report
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: '{project_name}'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+
+      - name: Snyk
+        uses: snyk/actions/maven@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

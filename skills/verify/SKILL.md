@@ -91,6 +91,16 @@ python ../../scripts/run.py entropy_scan.py
 | `--fix` | Auto-fix safely fixable issues (unused imports) |
 | `--json` | Output as JSON |
 
+<HARD-GATE>
+Before marking any verification as "passed" and any work as "done", you MUST invoke the 'superpowers:verification-before-completion' skill using the Skill tool with skill: "superpowers:verification-before-completion". This is NOT optional. This is NOT negotiable. Even if you think everything looks good, this verification step must happen.
+
+If superpowers is NOT available, perform a manual final check:
+- Re-read every changed file
+- Trace the data flow from user input to output
+- Verify error handling at every boundary
+- Check for off-by-one errors, null handling, edge cases
+</HARD-GATE>
+
 ## Claude Instructions
 
 When this command is invoked:
@@ -121,20 +131,35 @@ When this command is invoked:
    python ../../scripts/run.py entropy_scan.py
    ```
 
-6. **Report combined results**:
+6. **Run Layer 5 - Semantic verification**:
+   ```bash
+   python ../../scripts/run.py semantic_verify.py --report
+   ```
+
+7. **Run Layer 6 - E2E test verification**:
+   ```bash
+   python ../../scripts/run.py e2e_generate.py
+   python ../../scripts/run.py e2e_runner.py --browser chromium
+   ```
+
+8. **Report combined results**:
    - OpenSpec validation: pass/fail with details
    - Spec verification: structural compliance
    - Build-verify: lint/typecheck/test results
    - Entropy: dead code, style drift, stale docs
+   - Semantic: intent-level spec vs code compliance
+   - E2E: generated test stubs and run results
 
-7. **If issues are found**:
+9. **If issues are found**:
    - OpenSpec validation failures: guide user to update specs
    - Missing required sections: guide user to add them
    - Build failures: read error output, implement fixes, re-run
    - Doom loop (exit code 2): recommend human intervention
    - High entropy: list issues and optionally run `--fix`
+   - Semantic gaps: list missing implementations by priority
+   - E2E failures: capture screenshots, review test output
 
-8. **If all pass**: confirm implementation matches specification
+10. **If all pass**: confirm implementation matches specification
    - Suggest running `/opsx:archive` to archive the completed change
 
 ## Verification Checks

@@ -33,6 +33,7 @@ from harness_shared import (
 SKILL_DIR = SCRIPTS_DIR.parent
 TEMPLATES_DIR = SKILL_DIR / "templates"
 CONFIG_DIR = SKILL_DIR / "config"
+CICD_TEMPLATES_DIR = TEMPLATES_DIR / "cicd"
 
 OPENSPEC_CONFIG_YAML = """\
 schema: "1.0"
@@ -426,6 +427,192 @@ def setup_claude_hooks(
     }
 
 
+def detect_existing_cicd(project_dir: Path) -> list:
+    """Detect existing CI/CD configuration files."""
+    existing = []
+    candidates = [
+        project_dir / ".github" / "workflows",
+        project_dir / ".gitlab-ci.yml",
+        project_dir / ".circleci",
+        project_dir / "Jenkinsfile",
+        project_dir / "azure-pipelines.yml",
+        project_dir / "lefthook.yml",
+    ]
+    for path in candidates:
+        if path.is_dir() and any(path.iterdir()):
+            existing.append(str(path))
+        elif path.is_file():
+            existing.append(str(path))
+    return existing
+
+
+def detect_project_name(project_dir: Path) -> str:
+    """Detect project name from package manifest files."""
+    for manifest in ("package.json", "pyproject.toml", "go.mod", "pom.xml", "Cargo.toml"):
+        manifest_path = project_dir / manifest
+        if manifest_path.exists():
+            try:
+                content = manifest_path.read_text(encoding="utf-8")
+                if manifest == "package.json":
+                    import re
+                    match = re.search(r'"name"\s*:\s*"([^"]+)"', content)
+                    if match:
+                        return match.group(1)
+                elif manifest == "pyproject.toml":
+                    import re
+                    match = re.search(r"name\s*=\s*['\"]([^'\"]+)['\"]", content)
+                    if match:
+                        return match.group(1)
+                elif manifest == "go.mod":
+                    for line in content.splitlines()[:5]:
+                        if line.startswith("module "):
+                            return line.split()[-1].split("/")[-1]
+            except OSError:
+                pass
+    return project_dir.name
+
+
+def detect_language_version(project_dir: Path, language: str) -> str:
+    """Detect language version from config files."""
+    import re
+    version_defaults = {
+        "typescript": "20", "javascript": "20",
+        "python": "3.12", "go": "1.22",
+        "java": "17", "rust": "1.77",
+    }
+    # Try .node-version, .python-version, go.mod, etc.
+    version_files = {
+        "typescript": [".node-version", ".nvmrc"],
+        "javascript": [".node-version", ".nvmrc"],
+        "python": [".python-version", ".tool-versions"],
+        "go": ["go.mod"],
+        "java": [".java-version"],
+    }
+    for vf in version_files.get(language, []):
+        vp = project_dir / vf
+        if vp.exists():
+            try:
+                content = vp.read_text(encoding="utf-8").strip()
+                if vf == "go.mod":
+                    match = re.search(r"go\s+(\d+[\.\d]*)", content)
+                    if match:
+                        return match.group(1)
+                else:
+                    return content.split()[0]
+            except OSError:
+                pass
+    return version_defaults.get(language, "latest")
+
+
+def render_template(template_path: Path, context: dict) -> str:
+    """Render a template with simple {variable} replacement."""
+    try:
+        content = template_path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    for key, value in context.items():
+        content = content.replace(f"{{{key}}}", str(value))
+    return content
+
+
+def generate_cicd(
+    project_dir: Path,
+    language: str,
+    ci_provider: str = "github-actions",
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Generate CI/CD pipeline files based on detected language.
+
+    Creates GitHub Actions workflow, Lefthook config, and PR template
+    from language-specific templates in templates/cicd/.
+    """
+    lang_map = {
+        "typescript": "typescript",
+        "javascript": "typescript",  # JS uses same template as TS
+        "python": "python",
+        "go": "go",
+        "java": "java",
+    }
+    template_lang = lang_map.get(language)
+    if not template_lang:
+        return {"skipped": True, "reason": f"No CI/CD template for language: {language}"}
+
+    # Check existing CI/CD
+    existing = detect_existing_cicd(project_dir)
+    if existing and not force:
+        return {
+            "skipped": True,
+            "reason": f"Existing CI/CD found: {existing}. Use --force-cicd to overwrite.",
+        }
+
+    project_name = detect_project_name(project_dir)
+    lang_version = detect_language_version(project_dir, language)
+
+    # Detect install command
+    install_commands = {
+        "typescript": "npm ci",
+        "javascript": "npm ci",
+        "python": "pip install -r requirements-dev.txt",
+        "go": "",
+        "java": "",
+    }
+    pkg_managers = {
+        "typescript": "npm",
+        "javascript": "npm",
+        "python": "pip",
+        "go": "",
+        "java": "maven",
+    }
+
+    context = {
+        "project_name": project_name,
+        "language_version": lang_version,
+        "install_command": install_commands.get(language, ""),
+        "package_manager": pkg_managers.get(language, "npm"),
+    }
+
+    generated = []
+
+    # 1. GitHub Actions workflow
+    if ci_provider == "github-actions":
+        workflow_template = CICD_TEMPLATES_DIR / f"{template_lang}-quality.yml"
+        if workflow_template.exists():
+            workflow_content = render_template(workflow_template, context)
+            workflow_dir = project_dir / ".github" / "workflows"
+            workflow_dir.mkdir(parents=True, exist_ok=True)
+            workflow_path = workflow_dir / "quality.yml"
+            workflow_path.write_text(workflow_content, encoding="utf-8")
+            generated.append(str(workflow_path))
+
+    # 2. Lefthook config
+    lefthook_map = {
+        "typescript": "lefthook-ts.yml",
+        "javascript": "lefthook-ts.yml",
+        "python": "lefthook-py.yml",
+        "go": "lefthook-go.yml",
+    }
+    lefthook_template_name = lefthook_map.get(language)
+    if lefthook_template_name:
+        lefthook_template = CICD_TEMPLATES_DIR / lefthook_template_name
+        if lefthook_template.exists():
+            lefthook_content = render_template(lefthook_template, context)
+            lefthook_path = project_dir / "lefthook.yml"
+            lefthook_path.write_text(lefthook_content, encoding="utf-8")
+            generated.append(str(lefthook_path))
+
+    # 3. PR template
+    pr_template = CICD_TEMPLATES_DIR / "pr-template.md"
+    if pr_template.exists():
+        pr_dir = project_dir / ".github"
+        pr_dir.mkdir(parents=True, exist_ok=True)
+        pr_path = pr_dir / "pull_request_template.md"
+        pr_content = render_template(pr_template, context)
+        pr_path.write_text(pr_content, encoding="utf-8")
+        generated.append(str(pr_path))
+
+    return {"generated": generated, "language": language, "provider": ci_provider}
+
+
 def validate_setup(project_dir: Path) -> bool:
     """Verify that initialization completed successfully."""
     checks = [
@@ -483,6 +670,28 @@ def main():
         "--claude-hooks",
         action="store_true",
         help="Generate Claude Code hooks for quality enforcement",
+    )
+    parser.add_argument(
+        "--cicd",
+        action="store_true",
+        default=True,
+        help="Generate CI/CD pipeline files (default: true)",
+    )
+    parser.add_argument(
+        "--no-cicd",
+        action="store_true",
+        help="Skip CI/CD pipeline generation",
+    )
+    parser.add_argument(
+        "--ci-provider",
+        choices=["github-actions", "none"],
+        default="github-actions",
+        help="CI/CD provider (default: github-actions)",
+    )
+    parser.add_argument(
+        "--force-cicd",
+        action="store_true",
+        help="Overwrite existing CI/CD files",
     )
     args = parser.parse_args()
 
@@ -580,7 +789,27 @@ def main():
     else:
         print("Claude Code hooks: skipped (use --claude-hooks to enable)")
 
-    # Step 7: Validate
+    # Step 7: CI/CD generation
+    do_cicd = args.cicd and not getattr(args, "no_cicd", False)
+    if do_cicd:
+        print("Generating CI/CD pipeline files...")
+        cicd_result = generate_cicd(
+            project_dir,
+            language,
+            ci_provider=args.ci_provider,
+            force=args.force_cicd,
+        )
+        if cicd_result.get("skipped"):
+            print(f"  Skipped: {cicd_result['reason']}")
+        else:
+            for path in cicd_result.get("generated", []):
+                print(f"  Created: {path}")
+            if not cicd_result.get("generated"):
+                print("  No templates matched for this language")
+    else:
+        print("CI/CD: skipped (use --cicd to generate)")
+
+    # Step 8: Validate
     print()
     if validate_setup(project_dir):
         print("Initialization complete!")

@@ -1,0 +1,65 @@
+name: Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '{language_version}'
+          cache: 'pip'
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Ruff Format
+        run: ruff format --check .
+
+      - name: MyPy
+        run: mypy src/ --ignore-missing-imports
+
+      - name: Test with Coverage
+        run: pytest --cov=src --cov-fail-under=80 --cov-report=xml
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '{language_version}'
+
+      - run: pip install safety bandit
+
+      - name: Safety (SCA)
+        run: safety check --json
+
+      - name: Bandit (SAST)
+        run: bandit -r src/ -ll
+
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
