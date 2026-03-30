@@ -6,6 +6,7 @@ and subprocess execution helpers used across all harness scripts.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -27,17 +28,39 @@ def load_state(project_dir: Path) -> Optional[Dict[str, Any]]:
     if state_path.exists():
         try:
             return json.loads(state_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError as e:
+            print(f"Warning: corrupt state file {state_path}: {e}")
+            return None
+        except OSError as e:
+            print(f"Warning: cannot read state file {state_path}: {e}")
             return None
     return None
 
 
 def save_state(project_dir: Path, state: Dict[str, Any]) -> None:
-    """Write .harness/state.json with updated timestamp."""
+    """Write .harness/state.json atomically with updated timestamp."""
+    import tempfile
+
     state_path = project_dir / ".harness" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
-    state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    content = json.dumps(state, indent=2) + "\n"
+
+    # Atomic write: temp file then rename
+    try:
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(state_path.parent), suffix=".tmp", prefix=".state-"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(tmp_path, str(state_path))
+        except BaseException:
+            os.unlink(tmp_path) if os.path.exists(tmp_path) else None
+            raise
+    except OSError:
+        # Fallback to direct write if atomic fails
+        state_path.write_text(content, encoding="utf-8")
 
 
 # -- Language Detection --
@@ -285,12 +308,27 @@ def detect_openspec_cli() -> bool:
 # -- Subprocess Execution --
 
 
+def _validate_shell_input(value: str, name: str) -> str:
+    """Sanitize a value before interpolation into a shell command.
+
+    Rejects values containing shell metacharacters to prevent injection.
+    """
+    import re as _re
+    if _re.search(r"[;&|`$(){}!#<>\n\r]", value):
+        raise ValueError(
+            f"Unsafe {name} rejected (contains shell metacharacters): {value!r}"
+        )
+    return value
+
+
 def run_command(cmd: str, cwd: Path, timeout: int = 120) -> Dict[str, Any]:
     """Run a shell command and return structured result.
 
     Returns:
         Dict with keys: success, stdout, stderr, returncode
     """
+    # Validate timeout bounds
+    timeout = max(1, min(timeout, 3600))
     try:
         result = subprocess.run(
             cmd,
@@ -355,10 +393,12 @@ def load_harness_config(project_dir: Path) -> Optional[Dict[str, Any]]:
     if yaml is not None:
         try:
             return yaml.safe_load(content)
-        except Exception:
+        except Exception as e:
+            print(f"Warning: failed to parse {config_path}: {e}")
             return None
 
-    # Fallback: return None with warning (YAML needed for config)
+    # Fallback: warn that YAML is needed for config
+    print(f"Warning: PyYAML not installed, cannot parse {config_path}. Install with: pip install pyyaml")
     return None
 
 

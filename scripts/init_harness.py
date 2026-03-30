@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import shlex
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -111,8 +112,9 @@ def create_openspec_structure(
     # Try OpenSpec CLI first
     if detect_openspec_cli():
         print("  OpenSpec CLI detected, delegating initialization...")
+        safe_dir = shlex.quote(str(project_dir))
         result = run_command(
-            f"openspec init {project_dir} --tools claude --force",
+            f"openspec init {safe_dir} --tools claude --force",
             project_dir,
             timeout=30,
         )

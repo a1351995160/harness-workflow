@@ -116,33 +116,6 @@ def record_errors(
     )
 
 
-def print_status(project_dir: Path) -> None:
-    """Print current doom loop status."""
-    history = load_error_history(project_dir)
-    hashes = history.get("hashes", [])
-    runs = history.get("runs", [])
-
-    print(f"Doom Loop Status: {project_dir}")
-    print(f"  Total runs tracked: {len(runs)}")
-    print(f"  Recent error hashes: {hashes[-5:]}")
-
-    if len(hashes) >= DOOM_THRESHOLD:
-        last_n = hashes[-DOOM_THRESHOLD:]
-        if len(set(last_n)) == 1 and last_n[0] != "":
-            print(f"  WARNING: Doom loop! Same error {DOOM_THRESHOLD}x in a row")
-        else:
-            print("  No doom loop detected")
-    else:
-        print(f"  Insufficient data ({len(hashes)}/{DOOM_THRESHOLD} runs)")
-
-    if runs:
-        last_run = runs[-1]
-        print(
-            f"  Last run: iteration {last_run.get('iteration')}, "
-            f"{last_run.get('error_count')} errors"
-        )
-
-
 def reset_history(project_dir: Path) -> None:
     """Clear error history."""
     path = _history_path(project_dir)

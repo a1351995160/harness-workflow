@@ -114,15 +114,30 @@ def parse_tasks_from_md(content: str) -> List[Dict[str, Any]]:
             "agent": _infer_agent(description),
         })
 
-    # Also parse simpler task formats
+    # Simple format tasks are handled by parse_simple_tasks()
+
+    return tasks
+
+
+def parse_simple_tasks(content: str, existing: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Parse simple checkbox tasks that don't match T{n} format.
+
+    Handles: - [ ] Task description, - [x] Completed task, etc.
+    """
+    existing_descs = {t["description"] for t in existing}
+    tasks = list(existing)
+
     for match in re.finditer(
         r"-\s+\[([ x])\]\s+(.+)$", content, re.MULTILINE
     ):
-        completed = match.group(1) == "x"
         text = match.group(2).strip()
-        # Skip if already parsed as T{n} format
-        if any(t["description"] == text or text.startswith("T") and ":" in text for t in tasks):
+        completed = match.group(1) == "x"
+        # Skip T{n} format (already parsed) and duplicates
+        if re.match(r"T\d+\s*[:.]?\s*", text):
             continue
+        if text in existing_descs:
+            continue
+        existing_descs.add(text)
         tasks.append({
             "id": f"task-{len(tasks) + 1}",
             "description": text,
@@ -326,6 +341,7 @@ def main():
 
     # Parse tasks and dependencies
     tasks = parse_tasks_from_md(tasks_content)
+    tasks = parse_simple_tasks(tasks_content, tasks)
     tasks = parse_dependencies(tasks_content, tasks)
 
     if not tasks:

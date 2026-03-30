@@ -161,10 +161,20 @@ def extract_assertions_from_design(content: str) -> List[Dict[str, Any]]:
     """Extract testable assertions from design.md."""
     assertions = []
 
-    # API Endpoints
+    # API Endpoints (with validation to reduce false positives)
+    _seen_endpoints: set = set()
     for pattern in ASSERTION_PATTERNS["api_endpoints"]:
         for match in pattern.finditer(content):
             endpoint = match.group(1).strip().strip("`")
+            # Validate: must start with /, have reasonable length, no spaces
+            if not endpoint.startswith("/"):
+                continue
+            if " " in endpoint or len(endpoint) < 2 or len(endpoint) > 120:
+                continue
+            # Deduplicate
+            if endpoint in _seen_endpoints:
+                continue
+            _seen_endpoints.add(endpoint)
             assertions.append({
                 "id": f"API-{len(assertions) + 1}",
                 "source": "design:API",

@@ -22,7 +22,6 @@ from harness_shared import (
     detect_language,
     detect_build_commands,
     run_command,
-    format_result,
     load_harness_config,
     get_build_commands_from_config,
 )
