@@ -212,7 +212,7 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
    Use Skill tool with: skill: "superpowers:verification-before-completion"
    ```
 
-5. **Verify implementation** using OPSX:
+7. **Verify implementation** using OPSX:
    ```bash
    openspec validate --all --strict --json
    ```
@@ -222,9 +222,9 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
    python ../../scripts/run.py entropy_scan.py
    ```
 
-6. Update `.harness/state.json` stage "execute" to "complete"
+8. Update `.harness/state.json` stage "execute" to "complete"
 
-7. **Archive the change**:
+9. **Archive the change**:
    ```bash
    /opsx:archive
    ```
@@ -259,3 +259,9 @@ If `build_verify.py` exits with code 2 (doom loop):
 2. Check doom loop status: `python ../../scripts/run.py doom_loop.py --status`
 3. Consider: different approach, simpler fix, or ask user for guidance
 4. Reset history if starting fresh: `python ../../scripts/run.py doom_loop.py --reset`
+
+## References
+
+- Read [context-engineering.md](../../references/context-engineering.md) when preparing progressive disclosure for agent orchestration (Stage 4)
+- Read [parallel-execution.md](../../references/parallel-execution.md) when planning parallel task execution (Stage 4–5)
+- Read [build-verify-loop.md](../../references/build-verify-loop.md) when configuring build-verify feedback loops or debugging verification failures

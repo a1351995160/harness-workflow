@@ -165,6 +165,30 @@ project/
 └── lefthook.yml              # Git hooks config (--git only)
 ```
 
+## Bundled Resources
+
+### Templates (Assets)
+
+Templates are copied to the target project during initialization:
+
+| Template | Destination | Purpose |
+|----------|-------------|---------|
+| `templates/intent.md` | `intent.md` | Intent capture with Problem/Success Criteria sections |
+| `templates/proposal.md` | `openspec/changes/<name>/proposal.md` | Change proposal with Goals/Constraints |
+| `templates/design.md` | `openspec/changes/<name>/design.md` | Architecture and component design |
+| `templates/tasks.md` | `openspec/changes/<name>/tasks.md` | Phased task breakdown |
+
+### CI/CD Templates
+
+Language-specific quality enforcement configs in `templates/cicd/`:
+- `typescript-quality.yml`, `python-quality.yml`, `go-quality.yml`, `java-quality.yml`
+- `lefthook-ts.yml`, `lefthook-py.yml`, `lefthook-go.yml`
+- `pr-template.md`
+
+### References
+
+Read [hooks-cicd-by-language.md](../../references/hooks-cicd-by-language.md) when configuring git hooks or CI/CD pipelines for a specific language.
+
 ## Available OPSX Commands After Init
 
 Once `openspec init` completes, these slash commands become available:

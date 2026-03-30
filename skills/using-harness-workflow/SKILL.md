@@ -1,6 +1,6 @@
 ---
 name: using-harness-workflow
-description: Use when starting any conversation - establishes how to find and use harness-workflow skills for specification-driven development with OpenSpec integration
+description: "Meta-skill for the harness-workflow plugin — ALWAYS invoke before responding to any task. Triggers when: user requests a feature, project, or any creative work; mentions 'harness', 'workflow', 'openspec', 'spec', 'build-verify', 'quality gate'; says 'build me X', 'start workflow', 'init project', 'verify implementation', 'check status'; wants structured spec-driven development. Routes to init/start/status/verify skills. NOT optional when building anything."
 ---
 
 <SUBAGENT-STOP>
@@ -162,3 +162,7 @@ harness-workflow works well with:
 - **superpowers:verification-before-completion** — MUST be invoked before marking done (HARD-GATE)
 - **superpowers:writing-plans** — For creating implementation plans from specs
 - **OpenSpec CLI** (`npm install -g @fission-ai/openspec`) — Full OPSX command suite
+
+## References
+
+For deeper understanding of the workflow philosophy, read [harness-philosophy.md](../../references/harness-philosophy.md) when explaining the workflow to users or making architectural decisions about quality gates.

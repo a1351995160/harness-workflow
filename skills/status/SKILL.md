@@ -158,6 +158,10 @@ Harness Stages:
 Next: Run /opsx:continue to create specs for add-auth
 ```
 
+## References
+
+Read [quality-control-gates.md](../../references/quality-control-gates.md) for detailed quality gate definitions when a stage gate fails and you need to explain what specific content is missing.
+
 ## Exit Codes
 
 - `0` - Always for standard status (informational)

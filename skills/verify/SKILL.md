@@ -182,6 +182,12 @@ When this command is invoked:
 - MODIFIED sections need "(Previously: ...)" notation
 - REMOVED sections need a reason
 
+## References
+
+- Read [entropy-management.md](../../references/entropy-management.md) when entropy scan reports high drift and you need to interpret or remediate specific findings
+- Read [build-verify-loop.md](../../references/build-verify-loop.md) when build-verify loops fail repeatedly or doom loops are detected
+- Read [layered-detection.md](../../references/layered-detection.md) for details on the multi-layer verification architecture and how each detection layer contributes to quality assurance
+
 ## OPSX Integration
 
 After verification passes, the natural next step is:
