@@ -1,0 +1,28 @@
+{
+  "_comment": "Optional MCP server references for harness-workflow. Copy entries you need to .claude/settings.json mcpServers section.",
+  "sonarqube": {
+    "comment": "SAST results — requires sonarqube MCP server installed",
+    "command": "npx",
+    "args": ["-y", "@sonarqube/mcp-server"],
+    "env": {
+      "SONARQUBE_TOKEN": "${SONARQUBE_TOKEN}",
+      "SONARQUBE_URL": "${SONARQUBE_URL}"
+    }
+  },
+  "snyk": {
+    "comment": "SCA/vulnerability results — requires snyk MCP server installed",
+    "command": "npx",
+    "args": ["-y", "@snyk/mcp-server"],
+    "env": {
+      "SNYK_TOKEN": "${SNYK_TOKEN}"
+    }
+  },
+  "linear": {
+    "comment": "Issue tracking integration — requires linear MCP server installed",
+    "command": "npx",
+    "args": ["-y", "@linear/mcp-server"],
+    "env": {
+      "LINEAR_API_KEY": "${LINEAR_API_KEY}"
+    }
+  }
+}

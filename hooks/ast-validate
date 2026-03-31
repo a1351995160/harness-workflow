@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# PreToolUse hook: ast-validate
+# Uses ast-grep (sg) to detect forbidden AST patterns in source files.
+# Runs AFTER enforce-boundary in the PreToolUse chain.
+# Gracefully skips if ast-grep is not installed.
+set -euo pipefail
+
+# Read stdin JSON from Claude Code
+input=$(cat || true)
+
+# Extract file_path from tool_input
+file_path=""
+if echo "$input" | grep -q '"file_path"'; then
+    file_path=$(echo "$input" | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/".*//' | head -1 || true)
+fi
+
+# No file_path — not our concern
+if [ -z "$file_path" ]; then
+    exit 0
+fi
+
+# Only validate source files
+case "$file_path" in
+    *.ts|*.tsx|*.js|*.jsx|*.py|*.java|*.go|*.rs) ;;
+    *) exit 0 ;;
+esac
+
+# File must exist (skip for new files being created)
+if [ ! -f "$file_path" ]; then
+    exit 0
+fi
+
+# Check for ast-grep CLI
+if ! command -v sg &>/dev/null; then
+    # Graceful degradation — silently skip
+    exit 0
+fi
+
+# ── CRITICAL patterns (block the write) ──────────────────────
+
+# TypeScript/JavaScript: eval(), Function()
+blocked=false
+case "$file_path" in
+    *.ts|*.tsx|*.js|*.jsx)
+        if sg --pattern 'eval($$$ARGS)' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            blocked=true
+            msg="BLOCKED: eval() detected in $file_path. Use safer alternatives."
+        fi
+        if sg --pattern 'new Function($$$ARGS)' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            blocked=true
+            msg="BLOCKED: new Function() detected in $file_path. Use safer alternatives."
+        fi
+        ;;
+esac
+
+# Python: eval(), exec()
+case "$file_path" in
+    *.py)
+        if sg --pattern 'eval($$$ARGS)' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            blocked=true
+            msg="BLOCKED: eval() detected in $file_path. Use safer alternatives."
+        fi
+        if sg --pattern 'exec($$$ARGS)' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            blocked=true
+            msg="BLOCKED: exec() detected in $file_path. Use safer alternatives."
+        fi
+        ;;
+esac
+
+if [ "$blocked" = true ]; then
+    cat <<MSG >&2
+[harness-workflow] $msg
+Reason: Dangerous function patterns detected by AST analysis.
+Action: Replace with safe alternatives (e.g., json.parse, dict lookup, ast.literal_eval).
+MSG
+    exit 2
+fi
+
+# ── HIGH patterns (warn only) ────────────────────────────────
+warnings=""
+
+case "$file_path" in
+    *.tsx|*.jsx)
+        if sg --pattern 'dangerouslySetInnerHTML={$$PROPS}' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            warnings="${warnings}  - dangerouslySetInnerHTML detected (XSS risk)\n"
+        fi
+        ;;
+    *.ts|*.tsx|*.js|*.jsx)
+        if sg --pattern '$EL.innerHTML = $VAL' "$file_path" -l 2>/dev/null | head -1 | grep -q .; then
+            warnings="${warnings}  - innerHTML assignment detected (XSS risk)\n"
+        fi
+        ;;
+esac
+
+if [ -n "$warnings" ]; then
+    warning=$(cat <<EOF
+{"hookSpecificOutput":{"additionalContext":"[harness-workflow] AST WARNING on $file_path:\n$warnings  Consider using safer DOM APIs or sanitization."}}
+EOF
+)
+    echo "$warning"
+fi
+
+exit 0

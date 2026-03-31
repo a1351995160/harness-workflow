@@ -136,6 +136,31 @@ def check_harness_dir(project_dir: Path) -> Dict[str, Any]:
     }
 
 
+def check_mcp_config(project_dir: Path) -> Dict[str, Any]:
+    """Check if optional MCP server reference config exists."""
+    mcp_ref = Path(__file__).parent.parent / "config" / "mcp-servers.json"
+    if mcp_ref.exists():
+        try:
+            servers = json.loads(mcp_ref.read_text(encoding="utf-8"))
+            server_names = [k for k in servers if not k.startswith("_")]
+            return {
+                "name": "MCP server config",
+                "status": "OK",
+                "detail": f"reference config available ({len(server_names)} servers: {', '.join(server_names)})",
+            }
+        except (json.JSONDecodeError, OSError):
+            return {
+                "name": "MCP server config",
+                "status": "WARN",
+                "detail": "config/mcp-servers.json exists but is invalid JSON",
+            }
+    return {
+        "name": "MCP server config",
+        "status": "WARN",
+        "detail": "no reference config found (optional)",
+    }
+
+
 def run_doctor(project_dir: Path) -> List[Dict[str, Any]]:
     """Run all diagnostic checks and return results."""
     results: List[Dict[str, Any]] = []
@@ -158,6 +183,9 @@ def run_doctor(project_dir: Path) -> List[Dict[str, Any]]:
     # Project state
     results.append(check_harness_dir(project_dir))
     results.append(check_state_integrity(project_dir))
+
+    # MCP server config reference
+    results.append(check_mcp_config(project_dir))
 
     return results
 

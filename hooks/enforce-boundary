@@ -124,5 +124,39 @@ EOF
     echo "$warning"
 fi
 
-# Allow the write (warning is informational only)
+# ── Layer 3: Mandatory security scan on source files ────────
+# If the file is a source code file, run mandatory_check.py for
+# deterministic security pattern detection (eval, secrets, SQL injection).
+case "$basename" in
+    *.ts|*.tsx|*.js|*.jsx|*.py|*.java)
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+        MC_SCRIPT="${PLUGIN_ROOT}/scripts/mandatory_check.py"
+        RUN_SCRIPT="${PLUGIN_ROOT}/scripts/run.py"
+
+        # Prefer run.py wrapper if available
+        if [ -f "$RUN_SCRIPT" ]; then
+            CHECK_OUTPUT=$(python "$RUN_SCRIPT" mandatory_check.py --files "$file_path" --json 2>/dev/null || true)
+        elif [ -f "$MC_SCRIPT" ]; then
+            CHECK_OUTPUT=$(python "$MC_SCRIPT" --files "$file_path" --json 2>/dev/null || true)
+        fi
+
+        if [ -n "$CHECK_OUTPUT" ]; then
+            # Check if violations were found (status = "fail")
+            status=$(echo "$CHECK_OUTPUT" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 || true)
+            if echo "$status" | grep -q '"fail"'; then
+                # Extract violation count
+                count=$(echo "$CHECK_OUTPUT" | grep -o '"violation_count"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*' || echo "1")
+                cat <<MSG >&2
+[harness-workflow] BLOCKED: Mandatory security check found $count violation(s) in $file_path.
+Reason: Deterministic pattern scanner detected dangerous code patterns.
+Action: Review and fix the violations above. Run 'python scripts/run.py mandatory_check.py --files $file_path' for details.
+MSG
+                exit 2
+            fi
+        fi
+        ;;
+esac
+
+# Allow the write (all checks passed)
 exit 0
