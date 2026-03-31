@@ -123,7 +123,8 @@ def create_openspec_structure(
             changes_dir.mkdir(parents=True, exist_ok=True)
             return {"method": "cli", "created": created}
         else:
-            print(f"  OpenSpec CLI failed: {result['stderr'].strip()}")
+            stderr_text = result['stderr'].strip().encode('ascii', errors='replace').decode('ascii')
+            print(f"  OpenSpec CLI failed: {stderr_text}")
             print("  Falling back to manual structure")
 
     # Manual structure
