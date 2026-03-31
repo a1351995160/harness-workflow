@@ -3,6 +3,13 @@
 # These serve as documentation for agent roles, triggers, and system prompts.
 # Additional agents available via OMC: build-fixer, debugger, verifier, observer, gc-agent
 # Annotation: temperature/max_tokens are aspirational — Claude Code cannot enforce them.
+#
+# Real .md Agent Files (dispatched via Claude Code Agent tool):
+#   agents/harness-team-lead.md  — Orchestrates multi-agent execution, manages batches and stage transitions
+#   agents/harness-explorer.md   — Read-only codebase exploration and architecture mapping (haiku)
+#   agents/harness-executor.md   — Code implementation with build-verify enforcement (sonnet)
+#   agents/harness-tester.md     — Test writing and coverage verification (sonnet)
+#   agents/harness-reviewer.md   — Stage review against specifications and quality gates (inherit)
 
 agents:
   # ─────────────────────────────────────────────────────────────

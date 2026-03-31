@@ -164,6 +164,27 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
    ```
 7. Update `.harness/state.json` stage "harness" to "in_progress"
 
+8. **Agent Dispatch** (two paths):
+
+   **Path A: Real Agent Orchestration** (preferred, when Agent/TeamCreate available):
+   - Use TeamCreate to create a harness execution team
+   - Spawn specialized agents from `agents/` directory:
+     - `harness-team-lead` — orchestrates batches and stage transitions
+     - `harness-explorer` — read-only codebase analysis (haiku)
+     - `harness-executor` — code implementation (sonnet)
+     - `harness-tester` — test writing and verification (sonnet)
+   - Generate dispatch plan:
+     ```bash
+     python ../../scripts/run.py parallel_execute.py --dispatch --json
+     ```
+   - Team lead dispatches agents in parallel batches via SendMessage
+   - Run build-verify between batches
+
+   **Path B: Sequential Execution** (fallback, no Agent tools):
+   - Execute tasks one at a time using the parallel execution plan
+   - Run `build_verify.py --loop tight` after each task
+   - Use `/opsx:apply` for guided implementation
+
 ### Stage 5: Execute & Verify
 
 1. **If superpowers:executing-plans is available** — invoke it:

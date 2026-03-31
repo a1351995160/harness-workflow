@@ -304,6 +304,11 @@ def main():
         help="Output plan without executing",
     )
     parser.add_argument("--project-dir", default=".", help="Project directory")
+    parser.add_argument(
+        "--dispatch",
+        action="store_true",
+        help="Output Claude Code Agent dispatch commands (for TeamCreate orchestration)",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
@@ -362,6 +367,28 @@ def main():
         "batches": len(batches),
         "execution_plan": instructions,
     }
+
+    if args.dispatch:
+        # Output Claude Code Agent dispatch instructions
+        print("# Harness Workflow Agent Dispatch Plan")
+        print(f"# Tasks: {output['total_tasks']}, Batches: {len(batches)}")
+        print()
+        for batch in instructions:
+            mode = "PARALLEL" if batch["parallel"] else "SEQUENTIAL"
+            print(f"## Batch {batch['batch_id']} ({mode})")
+            for agent in batch["agents"]:
+                print(f"  Agent: {agent['dispatch_to']}")
+                print(f"  Model: {agent['model']}")
+                print(f"  Task: {agent['task_id']}: {agent['task'][:80]}")
+                print(f"  Prompt: {agent['prompt']}")
+                print()
+            if batch.get("blocked"):
+                print(f"  BLOCKED: {', '.join(batch['blocked'])}")
+            print()
+        print("# Execute: For PARALLEL batches, launch multiple Agent tool calls in one message.")
+        print("# For SEQUENTIAL batches, run one at a time.")
+        print("# Run build-verify between batches.")
+        sys.exit(0)
 
     if args.json:
         print(json.dumps(output, indent=2))
