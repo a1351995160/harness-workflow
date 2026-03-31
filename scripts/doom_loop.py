@@ -21,6 +21,7 @@ SCRIPTS_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from harness_shared import run_command
+import token_tracker
 
 MAX_HISTORY = 20
 DOOM_THRESHOLD = 3
@@ -237,6 +238,20 @@ def print_status(project_dir: Path) -> None:
             f"  Last run: iteration {last_run.get('iteration')}, "
             f"{last_run.get('error_count')} errors"
         )
+
+    # Token gradient analysis
+    gradient_summary = token_tracker.get_gradient_summary(history)
+    if gradient_summary["entries"] > 0:
+        print(f"  Token gradient: {gradient_summary['entries']} entries tracked")
+        if gradient_summary["is_spinning"]:
+            print("  WARNING: Token consumption is spinning (increasing without progress)")
+        if gradient_summary["is_execution_loop"]:
+            print("  WARNING: Execution loop detected (same error hash repeating)")
+        if gradient_summary["last_iteration"] is not None:
+            print(
+                f"    Last: iteration {gradient_summary['last_iteration']}, "
+                f"~{gradient_summary['last_token_estimate']} tokens"
+            )
 
 
 def main():

@@ -35,6 +35,7 @@ from harness_shared import (
 )
 
 import doom_loop
+import token_tracker
 
 DEFAULT_MAX_ITERATIONS = 3
 
@@ -221,6 +222,34 @@ def main():
             sys.exit(2)
 
         doom_loop.record_errors(error_history, results, iteration)
+
+        # Token gradient tracking (rough estimate based on output size)
+        output_size = sum(
+            len(r.get("stdout", "") + r.get("stderr", ""))
+            for r in results.values()
+        )
+        token_estimate = max(output_size // 4, 500)  # ~4 chars per token
+        token_tracker.record_iteration(project_dir, iteration, token_estimate)
+
+        # Token gradient doom loop check
+        if token_tracker.check_token_gradient(error_history):
+            print()
+            print("TOKEN GRADIENT DOOM LOOP: token consumption increasing without progress")
+            doom_loop.save_error_history(project_dir, error_history)
+            update_state_stage(project_dir, "execute", "blocked")
+            if args.json:
+                output_json(results, iteration, "doom_loop")
+            sys.exit(2)
+
+        # Execution loop check
+        if token_tracker.check_execution_loop(error_history):
+            print()
+            print("EXECUTION LOOP: same error pattern across all recent iterations")
+            doom_loop.save_error_history(project_dir, error_history)
+            update_state_stage(project_dir, "execute", "blocked")
+            if args.json:
+                output_json(results, iteration, "doom_loop")
+            sys.exit(2)
 
         # File edit doom loop check
         changed_files = doom_loop.get_changed_files(project_dir)

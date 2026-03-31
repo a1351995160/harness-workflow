@@ -57,7 +57,26 @@ python ../../scripts/run.py build_verify.py --loop tight
 - Exit code 1: Checks failed, read output and fix
 - Exit code 2: **Doom loop detected** — pause and ask user
 
-### Layer 4: Entropy Scan
+### Layer 4: Mandatory Security Checks
+
+Scans source files for known vulnerability patterns (deterministic, no AI):
+
+```bash
+python ../../scripts/run.py mandatory_check.py --directory src/
+python ../../scripts/run.py mandatory_check.py --staged    # git-staged files only
+python ../../scripts/run.py mandatory_check.py --files src/app.ts
+python ../../scripts/run.py mandatory_check.py --json
+```
+
+Checks for:
+- **SQL injection**: string interpolation/concatenation in queries
+- **Hardcoded secrets**: API keys, passwords, private keys
+- **Dangerous functions**: `eval()`, `exec()`, `__import__()`
+- **XSS patterns**: `innerHTML`, `document.write`, `dangerouslySetInnerHTML`
+
+Exit codes: 0 = clean, 1 = violations found
+
+### Layer 5: Entropy Scan
 
 Checks for dead code, style drift, stale docs:
 
@@ -89,6 +108,23 @@ python ../../scripts/run.py entropy_scan.py
 | Option | Description |
 |--------|-------------|
 | `--fix` | Auto-fix safely fixable issues (unused imports) |
+| `--json` | Output as JSON |
+
+### mandatory_check.py
+
+| Option | Description |
+|--------|-------------|
+| `--files PATH...` | Check specific files |
+| `--directory DIR` | Scan directory tree |
+| `--staged` | Check git-staged files only |
+| `--project-dir DIR` | Project root (default: current) |
+| `--json` | Output as JSON |
+
+### doctor.py
+
+| Option | Description |
+|--------|-------------|
+| `--project-dir DIR` | Project directory (default: current) |
 | `--json` | Output as JSON |
 
 <HARD-GATE>
@@ -126,17 +162,23 @@ When this command is invoked:
    python ../../scripts/run.py build_verify.py --loop tight
    ```
 
-5. **Run Layer 4 - Entropy scan**:
+5. **Run Layer 5 - Entropy scan**:
    ```bash
    python ../../scripts/run.py entropy_scan.py
    ```
 
-6. **Run Layer 5 - Semantic verification**:
+5b. **Run Layer 4 - Mandatory security checks**:
+   ```bash
+   python ../../scripts/run.py mandatory_check.py --staged
+   ```
+   If issues: list specific violations and guide user to fix.
+
+6. **Run Layer 6 - Semantic verification**:
    ```bash
    python ../../scripts/run.py semantic_verify.py --report
    ```
 
-7. **Run Layer 6 - E2E test verification**:
+7. **Run Layer 7 - E2E test verification**:
    ```bash
    python ../../scripts/run.py e2e_generate.py
    python ../../scripts/run.py e2e_runner.py --browser chromium
@@ -146,6 +188,7 @@ When this command is invoked:
    - OpenSpec validation: pass/fail with details
    - Spec verification: structural compliance
    - Build-verify: lint/typecheck/test results
+   - Mandatory checks: SQL injection, secrets, dangerous functions
    - Entropy: dead code, style drift, stale docs
    - Semantic: intent-level spec vs code compliance
    - E2E: generated test stubs and run results
@@ -154,10 +197,24 @@ When this command is invoked:
    - OpenSpec validation failures: guide user to update specs
    - Missing required sections: guide user to add them
    - Build failures: read error output, implement fixes, re-run
+   - Mandatory check violations: fix SQL injection, secrets, dangerous functions
    - Doom loop (exit code 2): recommend human intervention
+   - Token gradient spinning: agent consuming tokens without progress
    - High entropy: list issues and optionally run `--fix`
    - Semantic gaps: list missing implementations by priority
    - E2E failures: capture screenshots, review test output
+
+10. **Diagnostic tools** (use when troubleshooting):
+    ```bash
+    # Environment health check
+    python ../../scripts/run.py doctor.py
+
+    # Check mandatory security on specific files
+    python ../../scripts/run.py mandatory_check.py --files src/app.ts
+
+    # Doom loop status with token gradient
+    python ../../scripts/run.py doom_loop.py --status
+    ```
 
 10. **If all pass**: confirm implementation matches specification
    - Suggest running `/opsx:archive` to archive the completed change
