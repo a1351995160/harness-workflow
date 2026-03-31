@@ -62,12 +62,16 @@ def _get_openspec_dir(project_dir: Path) -> Path:
 
 
 def find_change_dirs(project_dir: Path) -> List[Path]:
-    """Find all change directories under openspec/changes/."""
+    """Find all change directories under openspec/changes/.
+
+    Excludes 'archive' and hidden directories.
+    """
     changes_dir = _get_openspec_dir(project_dir) / "changes"
     if not changes_dir.is_dir():
         return []
     return sorted(
-        d for d in changes_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+        d for d in changes_dir.iterdir()
+        if d.is_dir() and not d.name.startswith(".") and d.name != "archive"
     )
 
 

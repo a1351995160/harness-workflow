@@ -62,8 +62,11 @@ def create_harness_dir(
 
     harness_dir.mkdir(parents=True, exist_ok=True)
 
+    project_name = detect_project_name(project_dir)
+
     state = {
         "version": "2.0.0",
+        "project_name": project_name,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,
@@ -112,7 +115,15 @@ def create_openspec_structure(
     # Try OpenSpec CLI first
     if detect_openspec_cli():
         print("  OpenSpec CLI detected, delegating initialization...")
-        safe_dir = shlex.quote(str(project_dir))
+        # shlex.quote adds single quotes on Windows which breaks paths.
+        # Use subprocess-safe quoting instead.
+        import platform
+        dir_str = str(project_dir)
+        if platform.system() == "Windows":
+            # On Windows, double-quote the path for subprocess
+            safe_dir = f'"{dir_str}"'
+        else:
+            safe_dir = shlex.quote(dir_str)
         result = run_command(
             f"openspec init {safe_dir} --tools claude --force",
             project_dir,

@@ -168,6 +168,7 @@ This gate is NOT optional for complex features (3+ files, multiple components, o
 
    **Path A: Real Agent Orchestration** (preferred, when Agent/TeamCreate available):
    - Use TeamCreate to create a harness execution team
+   - **IMPORTANT**: Spawn agents with `mode: "auto"` or `mode: "bypassPermissions"` to prevent permission prompts from blocking autonomous execution. Without this, agents will stall waiting for user approval on every file write.
    - Spawn specialized agents from `agents/` directory:
      - `harness-team-lead` — orchestrates batches and stage transitions
      - `harness-explorer` — read-only codebase analysis (haiku)
