@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# PostToolUse hook: auto-format
+# After Write/Edit, silently runs the appropriate code formatter.
+# Never blocks — graceful degradation if formatter not found.
+set -euo pipefail
+
+# Read stdin JSON
+input=$(cat || true)
+
+# Extract file_path
+file_path=""
+if echo "$input" | grep -q '"file_path"'; then
+    file_path=$(echo "$input" | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"//' | sed 's/".*//' | head -1 || true)
+fi
+
+[ -z "$file_path" ] && exit 0
+
+# Only format source code files
+case "$file_path" in
+    *.ts|*.tsx|*.js|*.jsx|*.json|*.css|*.scss|*.less|*.html|*.md|*.yaml|*.yml)
+        formatter=""
+        if command -v prettier &>/dev/null; then
+            formatter="prettier"
+        elif command -v npx &>/dev/null; then
+            formatter="npx prettier"
+        fi
+
+        if [ -n "$formatter" ] && [ -f "$file_path" ]; then
+            $formatter --write "$file_path" 2>/dev/null || true
+        fi
+        ;;
+    *.py)
+        formatter=""
+        if command -v black &>/dev/null; then
+            formatter="black"
+        elif command -v ruff &>/dev/null; then
+            formatter="ruff format"
+        fi
+
+        if [ -n "$formatter" ] && [ -f "$file_path" ]; then
+            $formatter "$file_path" 2>/dev/null || true
+        fi
+        ;;
+    *.go)
+        if command -v gofmt &>/dev/null && [ -f "$file_path" ]; then
+            gofmt -w "$file_path" 2>/dev/null || true
+        fi
+        ;;
+    *.rs)
+        if command -v rustfmt &>/dev/null && [ -f "$file_path" ]; then
+            rustfmt "$file_path" 2>/dev/null || true
+        fi
+        ;;
+    *.java)
+        if command -v google-java-format &>/dev/null && [ -f "$file_path" ]; then
+            google-java-format -i "$file_path" 2>/dev/null || true
+        fi
+        ;;
+esac
+
+# Always exit 0 — auto-format never blocks
+exit 0

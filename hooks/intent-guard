@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# UserPromptSubmit hook: intent-guard
+# Detects attempts to skip SDD stages and warns the user.
+# Emits a confirmation prompt but does NOT hard-block (exit 0 always).
+set -euo pipefail
+
+# Read stdin — the user's prompt text
+input=$(cat || true)
+
+# Extract the actual prompt text
+prompt=""
+if echo "$input" | grep -q '"user_prompt"'; then
+    prompt=$(echo "$input" | sed 's/.*"user_prompt"[[:space:]]*:[[:space:]]*"//' | sed 's/".*//' | head -1 || true)
+elif echo "$input" | grep -q '"prompt"'; then
+    prompt=$(echo "$input" | sed 's/.*"prompt"[[:space:]]*:[[:space:]]*"//' | sed 's/".*//' | head -1 || true)
+else
+    # Fallback: treat entire input as prompt
+    prompt="$input"
+fi
+
+[ -z "$prompt" ] && exit 0
+
+# ── Stage-skip detection patterns ──────────────────────────
+# These patterns suggest the user wants to jump ahead without
+# completing the current SDD stage.
+skip_patterns=(
+    "skip spec"
+    "skip design"
+    "skip plan"
+    "skip spec"
+    "skip.*stage"
+    "just implement"
+    "just code"
+    "just write"
+    "go straight to"
+    "go directly to"
+    "don't need.*spec"
+    "don't need.*design"
+    "no need.*plan"
+    "不需要.*设计"
+    "不需要.*规范"
+    "跳过.*设计"
+    "跳过.*规范"
+    "直接写代码"
+    "直接实现"
+)
+
+skip_detected=false
+for pattern in "${skip_patterns[@]}"; do
+    if echo "$prompt" | grep -qi "$pattern"; then
+        skip_detected=true
+        break
+    fi
+done
+
+[ "$skip_detected" = false ] && exit 0
+
+# ── Check current harness stage ────────────────────────────
+# Only warn if .harness/state.json exists and we're in an early stage
+project_dir=""
+search_dir="$(pwd)"
+while [ -n "$search_dir" ] && [ "$search_dir" != "/" ]; do
+    if [ -d "$search_dir/.harness" ]; then
+        project_dir="$search_dir"
+        break
+    fi
+    search_dir=$(dirname "$search_dir")
+done
+
+[ -z "$project_dir" ] && exit 0
+
+state_file="$project_dir/.harness/state.json"
+[ ! -f "$state_file" ] && exit 0
+
+# Determine current stage
+current_stage=$(grep -oP '"current_stage"\s*:\s*"\K[^"]+' "$state_file" 2>/dev/null | head -1 || echo "")
+if [ -z "$current_stage" ]; then
+    # Try alternative field name
+    current_stage=$(grep -oP '"stage"\s*:\s*"\K[^"]+' "$state_file" 2>/dev/null | head -1 || echo "")
+fi
+
+# Stage order: intent -> spec -> plan -> harness -> execute
+# Only warn if we're in an early stage (intent/spec/plan)
+early_stage=false
+case "$current_stage" in
+    intent|spec|plan|harness)
+        early_stage=true
+        ;;
+esac
+
+if [ "$early_stage" = true ]; then
+    # Emit warning via additionalContext
+    warning=$(cat <<EOF
+{"hookSpecificOutput":{"additionalContext":"[harness-workflow] WARNING: You may be attempting to skip from the '${current_stage}' stage directly to implementation. The SDD workflow requires completing each stage sequentially (Intent → Spec → Plan → Harness → Execute). Skipping stages may lead to: misaligned requirements, scope creep, or architecture violations. Type 'CONFIRM SKIP' if you want to proceed anyway, or use /harness-workflow:status to check current progress."}}
+EOF
+)
+    echo "$warning"
+fi
+
+# Always exit 0 — intent-guard warns but never hard-blocks
+exit 0
