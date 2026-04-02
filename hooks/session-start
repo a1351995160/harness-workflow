@@ -33,6 +33,33 @@ using_escaped=$(escape_for_json "$using_content")
 
 session_context="<EXTREMELY_IMPORTANT>\nYou have the harness-workflow plugin installed.\n\n**Below is the full content of your 'harness-workflow:using-harness-workflow' skill - your introduction to using harness-workflow. For all other skills, use the 'Skill' tool:**\n\n${using_escaped}\n</EXTREMELY_IMPORTANT>"
 
+# ── Append quality context if .harness/ exists ──────────────
+if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "${CLAUDE_PROJECT_DIR}/.harness/state.json" ]; then
+    qc_stage=""
+    qc_name=""
+    # Extract current_stage
+    if grep -q '"current_stage"' "${CLAUDE_PROJECT_DIR}/.harness/state.json" 2>/dev/null; then
+        qc_stage=$(grep -oP '"current_stage"\s*:\s*"\K[^"]+' "${CLAUDE_PROJECT_DIR}/.harness/state.json" 2>/dev/null | head -1 || echo "")
+    fi
+    # Extract project_name
+    if grep -q '"project_name"' "${CLAUDE_PROJECT_DIR}/.harness/state.json" 2>/dev/null; then
+        qc_name=$(grep -oP '"project_name"\s*:\s*"\K[^"]+' "${CLAUDE_PROJECT_DIR}/.harness/state.json" 2>/dev/null | head -1 || echo "")
+    fi
+    # Build quality context (compact, under 200 bytes)
+    if [ -n "$qc_stage" ]; then
+        [ -z "$qc_name" ] && qc_name=$(basename "$CLAUDE_PROJECT_DIR")
+        qc_block="\\n## Harness Quality Context\\nProject: ${qc_name} | Stage: ${qc_stage}"
+        # Check error history
+        err_count=0
+        if [ -f "${CLAUDE_PROJECT_DIR}/.harness/error-history.json" ]; then
+            err_count=$(grep -c '"error_hash"' "${CLAUDE_PROJECT_DIR}/.harness/error-history.json" 2>/dev/null || echo "0")
+        fi
+        qc_block="${qc_block} | Errors tracked: ${err_count}"
+        # Append before closing tag
+        session_context=$(echo "$session_context" | sed "s|</EXTREMELY_IMPORTANT>|${qc_block}\\n</EXTREMELY_IMPORTANT>|")
+    fi
+fi
+
 # Output context injection as JSON.
 # Cursor hooks expect additional_context.
 # Claude Code hooks expect hookSpecificOutput.additionalContext.

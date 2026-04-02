@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# PreToolUse hook: bash-guard
+# Blocks destructive shell commands from being executed via the Bash tool.
+# Covers: rm -rf /, force push, hard reset, SQL without WHERE, fork bombs, pipe-to-shell.
+set -euo pipefail
+
+# Read stdin JSON from Claude Code
+input=$(cat || true)
+
+# Extract the command field from tool_input
+cmd=""
+if echo "$input" | grep -q '"command"'; then
+    cmd=$(printf '%s' "$input" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' | head -1 || true)
+fi
+
+# No command found — allow
+if [ -z "$cmd" ]; then
+    exit 0
+fi
+
+# ── Override check ────────────────────────────────────────────
+# If command contains --harness-allow, skip all checks
+if echo "$cmd" | grep -q -- '--harness-allow'; then
+    exit 0
+fi
+
+# ── Destructive pattern checks (exit 2 = block) ───────────────
+
+# Pattern 1: Recursive root/home delete
+if echo "$cmd" | grep -qiE 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|)-r[a-zA-Z]*\s+/($|\s)'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Recursive root delete detected.
+Reason: rm -rf / would destroy the entire filesystem.
+Action: Specify exact paths to remove. Add --harness-allow if absolutely necessary.
+MSG
+    exit 2
+fi
+
+if echo "$cmd" | grep -qiE 'rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|)-r[a-zA-Z]*\s+~($|\s)'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Recursive home directory delete detected.
+Reason: rm -rf ~ would destroy your home directory.
+Action: Specify exact paths to remove. Add --harness-allow if absolutely necessary.
+MSG
+    exit 2
+fi
+
+# Pattern 2: Force push to main/master
+if echo "$cmd" | grep -qiE 'git\s+push.*(--force|-f)\s.*origin\s+(main|master)'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Force push to main/master detected.
+Reason: Force pushing to the main branch can overwrite remote history and lose others' work.
+Action: Use regular git push. If rebasing, use --force-with-lease. Add --harness-allow to override.
+MSG
+    exit 2
+fi
+
+# Pattern 2b: General force push
+if echo "$cmd" | grep -qiE 'git\s+push.*(--force\b|-f\b)'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Force push detected.
+Reason: git push --force can overwrite remote history and lose others' work.
+Action: Use regular git push, or --force-with-lease for safer force push. Add --harness-allow to override.
+MSG
+    exit 2
+fi
+
+# Pattern 3: Hard reset
+if echo "$cmd" | grep -qiE 'git\s+reset.*--hard'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Destructive git reset --hard detected.
+Reason: git reset --hard discards all uncommitted changes permanently.
+Action: Use git stash or git reset (mixed) instead. Add --harness-allow to override.
+MSG
+    exit 2
+fi
+
+# Pattern 4: SQL DROP TABLE
+if echo "$cmd" | grep -qiE 'DROP\s+TABLE'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Destructive SQL detected (DROP TABLE).
+Reason: This will permanently delete table structure and data.
+Action: Use migrations or explicit backups first. Add --harness-allow to override.
+MSG
+    exit 2
+fi
+
+# Pattern 4b: SQL DELETE without WHERE
+if echo "$cmd" | grep -qiE 'DELETE\s+FROM' && ! echo "$cmd" | grep -qiE 'WHERE'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Unfiltered DELETE detected (no WHERE clause).
+Reason: DELETE FROM without WHERE deletes all rows in the table.
+Action: Add a WHERE clause to limit the scope. Add --harness-allow to override.
+MSG
+    exit 2
+fi
+
+# Pattern 5: Fork bomb
+if echo "$cmd" | grep -qE ':\(\)\{.*:\|:&\s*\}'; then
+    cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Fork bomb detected.
+Reason: This pattern would exhaust system resources.
+Action: Remove the fork bomb pattern from the command.
+MSG
+    exit 2
+fi
+
+# Pattern 6: Pipe remote content to shell (only curl/wget piping to sh/bash)
+if echo "$cmd" | grep -qiE '(curl|wget)[^|]*\|\s*([a-z/]*)(ba)?sh(\s|$)'; then
+    # Additional check: ensure it's actually piping TO shell, not just using bash in pipeline
+    if ! echo "$cmd" | grep -qiE '\|\s*(ba)?sh\s*(-c|<<|$)'; then
+        # Pattern looks like curl | sh -c "..." or curl | bash, block it
+        if echo "$cmd" | grep -qiE '(curl|wget)'; then
+            cat <<'MSG' >&2
+[harness-workflow] BLOCKED: Piping remote content to shell detected.
+Reason: curl/wget | sh executes untrusted remote code without verification.
+Action: Download first, inspect, then execute. Add --harness-allow to override.
+MSG
+            exit 2
+        fi
+    fi
+fi
+
+# ── Early-stage git push restriction ──────────────────────────
+# If .harness/state.json shows early stage, block ALL git push
+project_dir=""
+search_dir="$(pwd)"
+while [ -n "$search_dir" ] && [ "$search_dir" != "/" ]; do
+    if [ -d "$search_dir/.harness" ]; then
+        project_dir="$search_dir"
+        break
+    fi
+    search_dir=$(dirname "$search_dir")
+done
+
+if [ -n "$project_dir" ] && [ -f "$project_dir/.harness/state.json" ]; then
+    if echo "$cmd" | grep -qiE 'git\s+push'; then
+        current_stage=""
+        # Try current_stage field first, then stage field
+        current_stage=$(grep -oE '"current_stage"[[:space:]]*:[[:space:]]*"[^"]*"' "$project_dir/.harness/state.json" 2>/dev/null | grep -oE '"[^"]*"$' | tr -d '"' | head -1 || true)
+        if [ -z "$current_stage" ]; then
+            current_stage=$(grep -oE '"stage"[[:space:]]*:[[:space:]]*"[^"]*"' "$project_dir/.harness/state.json" 2>/dev/null | grep -oE '"[^"]*"$' | tr -d '"' | head -1 || true)
+        fi
+        case "$current_stage" in
+            intent|spec)
+                cat <<MSG >&2
+[harness-workflow] BLOCKED: git push during early stage (${current_stage}).
+Reason: Code should not be pushed during the ${current_stage} stage. Complete the SDD workflow first.
+Action: Use /harness-workflow:status to check current stage. Add --harness-allow to override.
+MSG
+                exit 2
+                ;;
+        esac
+    fi
+fi
+
+# All checks passed — allow the command
+exit 0

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Stop hook: quality-gates
-# Before Claude stops, runs build-verify to ensure code quality.
+# Stage-aware quality enforcement before Claude stops.
 # Exit 0 = allow stop, Exit 2 = block stop + inject error feedback.
-# This implements the "Ralph Loop" (back-pressure) from the research docs.
+# Implements the "Ralph Loop" (back-pressure) from the research docs.
+# v1.5.0: Enhanced to enforce gates at ALL stages, not just execute.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,7 +25,7 @@ if [ -z "$project_dir" ]; then
     exit 0
 fi
 
-# Check if execute stage is active (only enforce during implementation)
+# Check if state.json exists
 state_file="$project_dir/.harness/state.json"
 if [ ! -f "$state_file" ]; then
     exit 0
@@ -32,17 +33,68 @@ fi
 
 # Extract current stage from state.json
 stage=""
-if grep -q '"execute"' "$state_file" 2>/dev/null; then
-    # Check if execute stage is in_progress
-    if grep -A1 '"execute"' "$state_file" | grep -q '"in_progress\|active"'; then
-        stage="execute"
-    fi
+if grep -q '"current_stage"' "$state_file" 2>/dev/null; then
+    stage=$(grep -oP '"current_stage"\s*:\s*"\K[^"]+' "$state_file" 2>/dev/null | head -1 || echo "")
+fi
+# Fallback: check stages object for active/in_progress status
+if [ -z "$stage" ]; then
+    for s in intent spec plan harness execute; do
+        if grep -A2 "\"$s\"" "$state_file" 2>/dev/null | grep -q '"in_progress\|"active'; then
+            stage="$s"
+            break
+        fi
+    done
 fi
 
-# Not in execute stage — don't enforce quality gates on stop
-if [ "$stage" != "execute" ]; then
+# No active stage — skip
+if [ -z "$stage" ]; then
     exit 0
 fi
+
+# ── Stage-aware gate routing ────────────────────────────────────
+# Early stages (intent/spec/plan/harness): artifact validation
+# Execute stage: full build-verify
+
+case "$stage" in
+    intent|spec|plan|harness)
+        # Use check_status.py --gate for artifact validation
+        python_cmd=""
+        if command -v python3 &>/dev/null; then
+            python_cmd="python3"
+        elif command -v python &>/dev/null; then
+            python_cmd="python"
+        fi
+
+        if [ -z "$python_cmd" ]; then
+            exit 0
+        fi
+
+        gate_output=$($python_cmd "$PLUGIN_ROOT/scripts/run.py" check_status.py \
+            --gate "$stage" --project-dir "$project_dir" 2>&1) || gate_exit=$? || gate_exit=0
+
+        # Gate passed — allow stop
+        if [ "$gate_exit" -eq 0 ]; then
+            exit 0
+        fi
+
+        # Gate failed — block with blocker info
+        truncated=$(echo "$gate_output" | tail -20)
+        cat <<MSG >&2
+[harness-workflow] BLOCKED: Quality gate failed at '${stage}' stage.
+Cannot stop until required artifacts are complete.
+
+Gate check output:
+---
+$truncated
+---
+
+Complete the missing artifacts, then the quality gate will pass on next stop attempt.
+MSG
+        exit 2
+        ;;
+esac
+
+# ── Execute stage: full build-verify ────────────────────────────
 
 # ── Run build-verify ────────────────────────────────────────
 # Use the plugin's Python scripts for the actual verification

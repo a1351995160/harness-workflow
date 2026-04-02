@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# PostToolUse hook: post-write-check
+# After Write/Edit, runs lightweight lint checks and injects results
+# as additionalContext so Claude gets immediate quality feedback.
+# Always exits 0 (PostToolUse cannot block).
+set -euo pipefail
+
+# Read stdin JSON from Claude Code
+input=$(cat || true)
+
+# Extract file_path
+file_path=""
+if echo "$input" | grep -q '"file_path"'; then
+    file_path=$(echo "$input" | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | head -1 || true)
+fi
+
+# No file_path — skip
+if [ -z "$file_path" ]; then
+    exit 0
+fi
+
+# File must exist on disk
+if [ ! -f "$file_path" ]; then
+    exit 0
+fi
+
+# ── Determine linter by extension ─────────────────────────────
+lint_output=""
+lint_tool=""
+max_issues=5
+
+case "$file_path" in
+    *.py)
+        # Python: try ruff, then flake8
+        if command -v ruff &>/dev/null; then
+            lint_tool="ruff"
+            lint_output=$(timeout 3 ruff check --output-format=concise "$file_path" 2>/dev/null || true)
+        elif command -v flake8 &>/dev/null; then
+            lint_tool="flake8"
+            lint_output=$(timeout 3 flake8 --max-line-length=120 "$file_path" 2>/dev/null | head -10 || true)
+        fi
+        ;;
+    *.ts|*.tsx)
+        # TypeScript: try eslint via npx
+        if command -v npx &>/dev/null; then
+            lint_tool="eslint"
+            lint_output=$(timeout 5 npx eslint --format=compact "$file_path" 2>/dev/null | head -10 || true)
+        fi
+        ;;
+    *.js|*.jsx)
+        # JavaScript: try eslint via npx
+        if command -v npx &>/dev/null; then
+            lint_tool="eslint"
+            lint_output=$(timeout 5 npx eslint --format=compact "$file_path" 2>/dev/null | head -10 || true)
+        fi
+        ;;
+    *)
+        # Not a lintable file type — skip
+        exit 0
+        ;;
+esac
+
+# No linter available or no output — silent exit
+if [ -z "$lint_output" ] || [ -z "$lint_tool" ]; then
+    exit 0
+fi
+
+# Count issues
+issue_count=$(echo "$lint_output" | grep -c . || echo "0")
+
+if [ "$issue_count" -eq 0 ]; then
+    exit 0
+fi
+
+# Truncate to max_issues lines
+truncated=$(echo "$lint_output" | head -"$max_issues")
+
+# Escape for JSON embedding
+escaped_lint="${truncated//\/\\}"
+escaped_lint="${escaped_lint//\"/\\\"}"
+escaped_lint="${escaped_lint//$'\n'/\n}"
+escaped_lint="${escaped_lint//$'\r'/\r}"
+escaped_lint="${escaped_lint//$'\t'/\t}"
+
+escaped_path="${file_path//\/\\}"
+escaped_path="${escaped_path//\"/\\\"}"
+
+# Emit additionalContext with lint summary
+context="[harness-workflow] ${lint_tool}: ${issue_count} issue(s) in ${file_path}:\n${escaped_lint}\nFix these issues to improve code quality."
+escaped_context="${context//\/\\}"
+escaped_context="${escaped_context//\"/\\\"}"
+
+printf '{"hookSpecificOutput":{"additionalContext":"%s"}}\n' "$escaped_context"
+
+exit 0
